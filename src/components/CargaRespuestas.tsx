@@ -155,7 +155,7 @@ export function CargaRespuestas() {
     <div className="card">
       <h2 style={{ color: 'var(--color-primario)' }}>Cargar / modificar respuesta</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+      <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: '#555' }}>Actividad (vigentes)</label>
           <select value={idActividad} onChange={(e) => setIdActividad(e.target.value)} style={{ width: '100%' }}>
@@ -190,7 +190,7 @@ export function CargaRespuestas() {
               Ya existe una respuesta para este par — se va a actualizar, no duplicar.
             </p>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.75rem', marginBottom: '1rem' }}>
             <select value={respuesta} onChange={(e) => setRespuesta(e.target.value as RespuestaValor)}>
               <option value="">—</option>
               {OPCIONES_RESPUESTA.map((op) => <option key={op} value={op}>{op}</option>)}

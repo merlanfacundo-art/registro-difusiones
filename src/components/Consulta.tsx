@@ -113,11 +113,11 @@ export function Consulta() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.5rem' }}>
+    <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.5rem' }}>
       <div className="card">
         <h2 style={{ color: 'var(--color-primario)' }}>Consulta</h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem', marginBottom: '1rem' }}>
+        <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem', marginBottom: '1rem' }}>
           <select value={fCompanerx} onChange={(e) => setFCompanerx(e.target.value)}>
             <option value="">Todxs lxs compañerxs</option>
             {companerxs.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -145,32 +145,34 @@ export function Consulta() {
 
         <p style={{ color: '#777', fontSize: '0.85rem' }}>{filtrados.length} resultados</p>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
-              <th style={{ padding: '0.3rem' }}>Compañerx</th>
-              <th>Actividad</th>
-              <th>Área</th>
-              <th>Fecha</th>
-              <th>Respuesta</th>
-              <th>Comentario</th>
-              <th>Estado post</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.map((d) => (
-              <tr key={d._fila} style={{ borderBottom: '1px solid var(--color-borde)' }}>
-                <td style={{ padding: '0.3rem' }}>{d.compañerx}</td>
-                <td>{d.actividad}</td>
-                <td style={{ color: '#777' }}>{d.área}</td>
-                <td>{d.fecha}</td>
-                <td>{d.respuesta}</td>
-                <td style={{ color: '#555' }}>{d.comentario}</td>
-                <td>{d.estado_post}</td>
+        <div className="tabla-scroll">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
+                <th style={{ padding: '0.3rem' }}>Compañerx</th>
+                <th>Actividad</th>
+                <th>Área</th>
+                <th>Fecha</th>
+                <th>Respuesta</th>
+                <th>Comentario</th>
+                <th>Estado post</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtrados.map((d) => (
+                <tr key={d._fila} style={{ borderBottom: '1px solid var(--color-borde)' }}>
+                  <td style={{ padding: '0.3rem' }}>{d.compañerx}</td>
+                  <td>{d.actividad}</td>
+                  <td style={{ color: '#777' }}>{d.área}</td>
+                  <td>{d.fecha}</td>
+                  <td>{d.respuesta}</td>
+                  <td style={{ color: '#555' }}>{d.comentario}</td>
+                  <td>{d.estado_post}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="card superficie" style={{ alignSelf: 'start' }}>

@@ -11,8 +11,8 @@ export function Login() {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '4rem' }}>
-      <form onSubmit={handleSubmit} className="card" style={{ width: 360 }}>
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '4rem', padding: '0 1rem' }}>
+      <form onSubmit={handleSubmit} className="card" style={{ width: '100%', maxWidth: 360 }}>
         <h1 style={{ fontSize: '1.3rem', color: 'var(--color-primario)' }}>
           Registro de Difusiones
         </h1>

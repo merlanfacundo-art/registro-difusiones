@@ -75,3 +75,59 @@ input:focus, select:focus, textarea:focus {
 
 .badge-exito { color: var(--color-exito); font-weight: 600; }
 .badge-acento { color: var(--color-acento); font-weight: 600; }
+
+/* Desktop-first: por debajo de 640px, los layouts en grid de 2 columnas
+   pasan a apilarse verticalmente (ver uso de .grid-responsive en cada
+   componente en vez de estilos inline fijos). */
+@media (max-width: 640px) {
+  .grid-responsive {
+    grid-template-columns: 1fr !important;
+  }
+  table {
+    font-size: 0.8rem;
+  }
+  .card {
+    padding: 0.85rem;
+  }
+}
+
+/* Tablas anchas: en vez de romper el layout, scrollean horizontalmente
+   dentro de su propio contenedor. */
+.tabla-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.menu-toggle {
+  display: none;
+}
+
+.nav-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    padding: 0.75rem 1rem;
+  }
+  .menu-toggle {
+    display: inline-block;
+  }
+  .nav-desktop {
+    display: none !important;
+  }
+  .nav-mobile {
+    display: block;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-borde);
+  }
+  main {
+    padding: 0.85rem !important;
+  }
+}

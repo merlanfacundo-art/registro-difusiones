@@ -11,6 +11,7 @@ Hecho:
 - Consulta con filtros combinables: compañerx, actividad, área, rango de fechas, estado de respuesta (`/consulta`).
 - Generador de mensaje de WhatsApp por actividad, con conteo de confirmados + listado, y conteo de "otras respuestas" (No / A confirmar / Sin Respuesta) con listado opcional por tipo. Excluye `N/A` (no convocadxs) del mensaje.
 - Endpoints `/api/usuarios`, `/api/companerxs`, `/api/actividades`, `/api/respuestas` (GET/POST/PATCH), con validación de rol server-side en las escrituras.
+- Adaptación mobile: layouts responsive (se apilan en pantallas angostas, tablas con scroll horizontal, menú hamburguesa) + PWA instalable (ícono en pantalla de inicio, `manifest.json` + service worker mínimo). El mismo código sirve para desktop y mobile, se adapta solo según el ancho de pantalla.
 
 Todavía no implementado (próximos pasos de la secuencia):
 - Carga de estado post-actividad ✅/❌ (`/cierre`).
@@ -77,6 +78,13 @@ Esto levanta la app completa (frontend + `/api`) en `http://localhost:3000`.
 2. En [vercel.com](https://vercel.com), importá el repo.
 3. En "Environment Variables" del proyecto, cargá las mismas 3 variables del `.env`.
 4. Deploy. Vercel detecta Vite automáticamente.
+
+## Adaptación mobile / PWA
+
+- El service worker (`public/sw.js`) solo se registra en producción (`import.meta.env.PROD`), nunca en `vercel dev` — en desarrollo generaría confusión cacheando versiones viejas del código.
+- Para instalarla desde el celular: abrir la URL de producción en Chrome (Android) o Safari (iOS), y usar "Agregar a pantalla de inicio" desde el menú del navegador. Chrome en Android también puede ofrecer un banner de instalación automático.
+- Los datos de `/api` nunca se cachean (el service worker los excluye explícitamente) — siempre se piden en vivo a Google Sheets, para no mostrar información desactualizada.
+- El ícono (`public/icon-192.png`, `public/icon-512.png`) es un placeholder simple con la paleta de marca ("RD" sobre fondo azul) — si en algún momento tenés un logo real de Patria Grande en el formato adecuado, se puede reemplazar fácilmente.
 
 ## Convenciones importantes
 
