@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { Layout } from './components/Layout';
 import { CargaRespuestas } from './components/CargaRespuestas';
+import { AltaActividad } from './components/AltaActividad';
 import { Consulta } from './components/Consulta';
 import { Proximamente } from './components/Proximamente';
 import { puedeEscribir } from './types';
@@ -23,6 +24,10 @@ function Rutas() {
         <Route
           path="/carga"
           element={escritura ? <CargaRespuestas /> : <Navigate to="/consulta" replace />}
+        />
+        <Route
+          path="/actividades"
+          element={escritura ? <AltaActividad /> : <Navigate to="/consulta" replace />}
         />
         <Route path="/consulta" element={<Consulta />} />
         <Route

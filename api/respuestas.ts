@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSheetsClient, agregarFila, actualizarCelda } from './_lib/sheets.js';
 import { verificarPuedeEscribir } from './_lib/auth.js';
 
-const RANGO = 'Respuestas!A:K';
+const RANGO = 'Respuestas!A:L';
 const COLUMNAS = [
   'id_respuesta',
   'compañerx',
@@ -15,6 +15,7 @@ const COLUMNAS = [
   'estado_post',
   'fecha_carga',
   'cargado_por',
+  'id_actividad',
 ] as const;
 
 // GET  /api/respuestas            -> todas las filas, con su número de fila real
@@ -39,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'POST') {
     const body = req.body;
-    const requeridos = ['compañerx', 'actividad', 'área', 'fecha', 'hora', 'respuesta', 'cargado_por'];
+    const requeridos = ['id_actividad', 'compañerx', 'actividad', 'fecha', 'hora', 'respuesta', 'cargado_por'];
     const faltantes = requeridos.filter((campo) => !body[campo]);
     if (faltantes.length > 0) {
       return res.status(400).json({ error: `Faltan campos: ${faltantes.join(', ')}` });
@@ -68,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '', // estado_post se completa después de la actividad
       fecha_carga,
       body.cargado_por,
+      body.id_actividad,
     ]);
 
     return res.status(201).json({ id_respuesta, fecha_carga });
@@ -75,18 +77,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'PATCH') {
     const fila = Number(req.query.fila);
-    const { estado_post, actor_email } = req.body;
-    if (!fila || !estado_post) {
-      return res.status(400).json({ error: 'Faltan los parámetros fila o estado_post' });
+    const { estado_post, respuesta, comentario, actor_email } = req.body;
+    if (!fila || (!estado_post && !respuesta && comentario === undefined)) {
+      return res.status(400).json({ error: 'Faltan los parámetros: fila y al menos uno de estado_post/respuesta/comentario' });
     }
 
     const autorizado = await verificarPuedeEscribir(actor_email);
     if (!autorizado) {
-      return res.status(403).json({ error: 'El usuario no tiene permiso para editar el estado post-actividad' });
+      return res.status(403).json({ error: 'El usuario no tiene permiso para editar esta respuesta' });
     }
 
-    // Columna I = estado_post (novena columna: A=1..I=9)
-    await actualizarCelda(`Respuestas!I${fila}`, estado_post);
+    // Columnas fijas según COLUMNAS: G=respuesta, H=comentario, I=estado_post
+    if (respuesta !== undefined) await actualizarCelda(`Respuestas!G${fila}`, respuesta);
+    if (comentario !== undefined) await actualizarCelda(`Respuestas!H${fila}`, comentario);
+    if (estado_post !== undefined) await actualizarCelda(`Respuestas!I${fila}`, estado_post);
+
     return res.status(200).json({ ok: true });
   }
 

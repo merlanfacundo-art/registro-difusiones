@@ -57,24 +57,30 @@ export async function leerHojaComoObjetos(rango: string): Promise<Record<string,
 }
 
 // Agrega una fila nueva al final de la hoja indicada.
+// Usa RAW (no USER_ENTERED) para que Sheets NO intente interpretar los
+// valores como fecha/hora/número — los guarda tal cual como texto. Es
+// necesario porque nuestro código siempre controla el formato exacto
+// (fechas ISO, horas HH:mm) y una auto-conversión de Sheets rompe esos
+// formatos al leerlos de vuelta.
 export async function agregarFila(rango: string, valores: (string | number)[]): Promise<void> {
   const { sheets, spreadsheetId } = getSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: rango,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: { values: [valores] },
   });
 }
 
 // Actualiza una celda puntual (usado por ej. para cargar el estado_post
-// sobre una fila ya existente de Respuestas).
+// sobre una fila ya existente de Respuestas). Mismo motivo: RAW evita que
+// Sheets reinterprete el valor.
 export async function actualizarCelda(rango: string, valor: string): Promise<void> {
   const { sheets, spreadsheetId } = getSheetsClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: rango,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: { values: [[valor]] },
   });
 }

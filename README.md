@@ -6,21 +6,30 @@ App para registrar respuestas a difusiones de actividades, reemplazando la carga
 
 Hecho:
 - Login por email contra la hoja "Usuarios" (sin contraseña, igual que la app del CC).
-- Formulario de carga de respuestas por actividad (`/carga`).
+- Alta de actividades (`/actividades`), catálogo propio con fecha/hora, para poder elegirlas antes de que exista ninguna respuesta.
+- Carga/edición de respuestas por par (actividad vigente, compañerx) (`/carga`): si ya existe una respuesta para ese par, la precarga y la actualiza en vez de duplicarla.
 - Consulta con filtros combinables: compañerx, actividad, área, rango de fechas, estado de respuesta (`/consulta`).
 - Generador de mensaje de WhatsApp por actividad, con conteo de confirmados + listado, y conteo de "otras respuestas" (No / A confirmar / Sin Respuesta) con listado opcional por tipo. Excluye `N/A` (no convocadxs) del mensaje.
-- Endpoints `/api/usuarios`, `/api/companerxs`, `/api/respuestas` (GET/POST/PATCH), con validación de rol server-side en las escrituras.
+- Endpoints `/api/usuarios`, `/api/companerxs`, `/api/actividades`, `/api/respuestas` (GET/POST/PATCH), con validación de rol server-side en las escrituras.
 
 Todavía no implementado (próximos pasos de la secuencia):
 - Carga de estado post-actividad ✅/❌ (`/cierre`).
 - Regeneración de la vista wide / resumen mensual (`/resumen`).
 
-Estas dos pantallas están como placeholder visible en la app ("Todavía no está implementado"), no simuladas ni con datos falsos.
+## ⚠️ Pasos manuales pendientes en Google Sheets (antes de correr esta versión)
+
+No tengo edición de celdas sobre archivos ya existentes desde mi conector — estos 2 pasos los tenés que hacer vos, una sola vez:
+
+1. **Migrar la hoja "Actividades"** (creada como archivo separado) a "Organización 2026", igual que hiciste con Respuestas/Usuarios/Compañerxs.
+2. **Agregar la columna `id_actividad` en la celda L1 de la hoja "Respuestas"** ya existente (queda como columna nueva al final, las filas viejas quedan con esa celda vacía — no pasa nada, son respuestas cargadas antes de este cambio).
 
 ## Decisiones de diseño a tener presente
 
+- Una actividad es "vigente" (aparece en el dropdown de carga) mientras su fecha+hora de inicio sea **estrictamente posterior** al momento actual. Una vez que arrancó, deja de poder cargarse o modificarse desde `/carga` — solo queda disponible el Cierre post-actividad (a implementar).
+- Cada respuesta se identifica por `id_actividad` (no por nombre de actividad), evitando ambigüedad si dos actividades comparten nombre en fechas distintas. `actividad`, `fecha`, `hora` y `área` se guardan igual en cada fila de Respuestas (denormalizados), para que Consulta y el generador de WhatsApp sigan funcionando sin cruzar datos.
+- El campo `área` de cada respuesta se **copia automáticamente** desde la ficha de la persona en la hoja "Compañerxs" al momento de cargar la respuesta (denormalizado) — no se tipea a mano. Si una persona cambia de área más adelante, sus respuestas ya cargadas conservan el área que tenía en ese momento (es un dato histórico).
 - El generador de WhatsApp trabaja sobre **una actividad puntual** (elegida en el filtro de actividad), y usa **todas** sus respuestas — no respeta el resto de los filtros activos en la tabla (compañerx/área/fecha), para evitar armar un mensaje con un listado de confirmados incompleto.
-- El filtro "por área" en Consulta filtra por el campo `área` de la fila de Respuestas (el área de la actividad), no por el área del compañerx en la hoja "Compañerxs". Si en algún momento hace falta filtrar por el área de la persona, es una función distinta a agregar.
+- **Gap conocido, solo de interfaz:** la restricción de "actividad vigente" para editar respuestas hoy se aplica únicamente en el frontend (el dropdown solo muestra vigentes). El endpoint `/api/respuestas` PATCH no valida server-side si la actividad ya empezó — alguien llamando la API directo podría editar una respuesta de una actividad ya pasada. Si esto te importa, avisame y lo cierro del mismo modo que la validación de rol.
 
 ## Arquitectura
 

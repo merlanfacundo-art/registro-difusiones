@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const filas = await leerHojaComoObjetos('Compañerxs!A:E');
   const companerxs = filas.map((f) => ({
     nombre: f.nombre,
-    area: f.area,
+    area: f.área,
     activo: f.activo === '1',
     vacaciones_desde: f.vacaciones_desde || null,
     vacaciones_hasta: f.vacaciones_hasta || null,

@@ -8,6 +8,7 @@ const ESTADOS: RespuestaValor[] = ['Si', 'No', 'A confirmar', 'N/A', 'Sin Respue
 export function Consulta() {
   const [datos, setDatos] = useState<RespuestaConFila[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   // Filtros combinables
   const [fCompanerx, setFCompanerx] = useState('');
@@ -25,8 +26,15 @@ export function Consulta() {
 
   useEffect(() => {
     fetch('/api/respuestas')
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+          throw new Error(data.error ?? `Error HTTP ${r.status}`);
+        }
+        return r.json();
+      })
       .then((data: RespuestaConFila[]) => setDatos(data))
+      .catch((e) => setErrorCarga(e instanceof Error ? e.message : 'Error desconocido al cargar respuestas'))
       .finally(() => setCargando(false));
   }, []);
 
@@ -96,6 +104,13 @@ export function Consulta() {
   }
 
   if (cargando) return <p>Cargando respuestas...</p>;
+  if (errorCarga) {
+    return (
+      <div className="card" style={{ borderColor: 'var(--color-acento)' }}>
+        <p className="badge-acento">No se pudieron cargar las respuestas: {errorCarga}</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '1.5rem' }}>
@@ -138,6 +153,7 @@ export function Consulta() {
               <th>Área</th>
               <th>Fecha</th>
               <th>Respuesta</th>
+              <th>Comentario</th>
               <th>Estado post</th>
             </tr>
           </thead>
@@ -149,6 +165,7 @@ export function Consulta() {
                 <td style={{ color: '#777' }}>{d.área}</td>
                 <td>{d.fecha}</td>
                 <td>{d.respuesta}</td>
+                <td style={{ color: '#555' }}>{d.comentario}</td>
                 <td>{d.estado_post}</td>
               </tr>
             ))}

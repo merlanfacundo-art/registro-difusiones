@@ -22,6 +22,7 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         <strong style={{ color: 'var(--color-primario)' }}>Registro de Difusiones</strong>
         <nav style={{ display: 'flex', gap: '1rem' }}>
+          {escritura && <NavLink to="/actividades">Nueva actividad</NavLink>}
           {escritura && <NavLink to="/carga">Cargar respuestas</NavLink>}
           <NavLink to="/consulta">Consultar</NavLink>
           {escritura && <NavLink to="/cierre">Cierre post-actividad</NavLink>}
