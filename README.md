@@ -7,14 +7,20 @@ App para registrar respuestas a difusiones de actividades, reemplazando la carga
 Hecho:
 - Login por email contra la hoja "Usuarios" (sin contraseña, igual que la app del CC).
 - Formulario de carga de respuestas por actividad (`/carga`).
-- Endpoints `/api/usuarios`, `/api/companerxs`, `/api/respuestas` (GET/POST/PATCH).
+- Consulta con filtros combinables: compañerx, actividad, área, rango de fechas, estado de respuesta (`/consulta`).
+- Generador de mensaje de WhatsApp por actividad, con conteo de confirmados + listado, y conteo de "otras respuestas" (No / A confirmar / Sin Respuesta) con listado opcional por tipo. Excluye `N/A` (no convocadxs) del mensaje.
+- Endpoints `/api/usuarios`, `/api/companerxs`, `/api/respuestas` (GET/POST/PATCH), con validación de rol server-side en las escrituras.
 
 Todavía no implementado (próximos pasos de la secuencia):
-- Vista de consulta con filtros (`/consulta`).
 - Carga de estado post-actividad ✅/❌ (`/cierre`).
 - Regeneración de la vista wide / resumen mensual (`/resumen`).
 
-Estas tres pantallas están como placeholder visible en la app ("Todavía no está implementado"), no simuladas ni con datos falsos.
+Estas dos pantallas están como placeholder visible en la app ("Todavía no está implementado"), no simuladas ni con datos falsos.
+
+## Decisiones de diseño a tener presente
+
+- El generador de WhatsApp trabaja sobre **una actividad puntual** (elegida en el filtro de actividad), y usa **todas** sus respuestas — no respeta el resto de los filtros activos en la tabla (compañerx/área/fecha), para evitar armar un mensaje con un listado de confirmados incompleto.
+- El filtro "por área" en Consulta filtra por el campo `área` de la fila de Respuestas (el área de la actividad), no por el área del compañerx en la hoja "Compañerxs". Si en algún momento hace falta filtrar por el área de la persona, es una función distinta a agregar.
 
 ## Arquitectura
 
