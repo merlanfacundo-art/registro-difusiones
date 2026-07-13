@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { Layout } from './components/Layout';
 import { CargaRespuestas } from './components/CargaRespuestas';
 import { AltaActividad } from './components/AltaActividad';
+import { Cierre } from './components/Cierre';
 import { Consulta } from './components/Consulta';
 import { Proximamente } from './components/Proximamente';
 import { puedeEscribir } from './types';
@@ -32,11 +33,7 @@ function Rutas() {
         <Route path="/consulta" element={<Consulta />} />
         <Route
           path="/cierre"
-          element={
-            escritura
-              ? <Proximamente titulo="Cierre post-actividad (✅ / ❌)" />
-              : <Navigate to="/consulta" replace />
-          }
+          element={escritura ? <Cierre /> : <Navigate to="/consulta" replace />}
         />
         <Route path="/resumen" element={<Proximamente titulo="Resumen mensual (vista wide)" />} />
         <Route path="*" element={<Navigate to={rutaPorDefecto} replace />} />

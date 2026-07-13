@@ -17,6 +17,10 @@ Hecho:
 - Horario de llegada/salida (opcionales) por respuesta, validados contra la ventana de la actividad (hora de inicio / hora de fin si está definida).
 - Mensaje de WhatsApp: listado uno por línea (no separado por coma), con horario entre paréntesis cuando está cargado.
 - Filtro por área al elegir compañerx en Carga.
+- Cierre post-actividad (`/cierre`): elegí una actividad ya pasada, marcá ✅/❌ por compañerx (independientemente de su respuesta original), guardado en bloque con manejo de errores por fila.
+
+Todavía no implementado:
+- Regeneración de la vista wide / resumen mensual (`/resumen`).
 
 ## ⚠️ Nuevos pasos manuales pendientes en Google Sheets
 
@@ -25,20 +29,9 @@ Hecho:
 
 Como siempre, las filas ya cargadas quedan con esas celdas vacías — no se pierde nada.
 
-Todavía no implementado (próximos pasos de la secuencia):
-- Carga de estado post-actividad ✅/❌ (`/cierre`).
-- Regeneración de la vista wide / resumen mensual (`/resumen`).
-
-## ⚠️ Pasos manuales pendientes en Google Sheets (antes de correr esta versión)
-
-No tengo edición de celdas sobre archivos ya existentes desde mi conector — estos 2 pasos los tenés que hacer vos, una sola vez:
-
-1. **Migrar la hoja "Actividades"** (creada como archivo separado) a "Organización 2026", igual que hiciste con Respuestas/Usuarios/Compañerxs.
-2. **Agregar la columna `id_actividad` en la celda L1 de la hoja "Respuestas"** ya existente (queda como columna nueva al final, las filas viejas quedan con esa celda vacía — no pasa nada, son respuestas cargadas antes de este cambio).
-
 ## Decisiones de diseño a tener presente
 
-- Una actividad es "vigente" (aparece en el dropdown de carga) mientras su fecha+hora de inicio sea **estrictamente posterior** al momento actual. Una vez que arrancó, deja de poder cargarse o modificarse desde `/carga` — solo queda disponible el Cierre post-actividad (a implementar).
+- Una actividad es "vigente" (aparece en el dropdown de carga) mientras su fecha+hora de inicio sea **estrictamente posterior** al momento actual. Una vez que arrancó, deja de poder cargarse o modificarse desde `/carga` — pasa a estar disponible en Cierre post-actividad (`/cierre`), que muestra exactamente las que ya no son vigentes.
 - Cada respuesta se identifica por `id_actividad` (no por nombre de actividad), evitando ambigüedad si dos actividades comparten nombre en fechas distintas. `actividad`, `fecha`, `hora` y `área` se guardan igual en cada fila de Respuestas (denormalizados), para que Consulta y el generador de WhatsApp sigan funcionando sin cruzar datos.
 - El campo `área` de cada respuesta se **copia automáticamente** desde la ficha de la persona en la hoja "Compañerxs" al momento de cargar la respuesta (denormalizado) — no se tipea a mano. Si una persona cambia de área más adelante, sus respuestas ya cargadas conservan el área que tenía en ese momento (es un dato histórico).
 - El generador de WhatsApp trabaja sobre **una actividad puntual** (elegida en el filtro de actividad), y usa **todas** sus respuestas — no respeta el resto de los filtros activos en la tabla (compañerx/área/fecha), para evitar armar un mensaje con un listado de confirmados incompleto.
