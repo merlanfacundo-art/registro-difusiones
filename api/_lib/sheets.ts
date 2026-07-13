@@ -63,12 +63,21 @@ export async function leerHojaComoObjetos(rango: string): Promise<Record<string,
 // (fechas ISO, horas HH:mm) y una auto-conversión de Sheets rompe esos
 // formatos al leerlos de vuelta.
 export async function agregarFila(rango: string, valores: (string | number)[]): Promise<void> {
+  await agregarFilas(rango, [valores]);
+}
+
+// Igual que agregarFila, pero para varias filas en una sola llamada a la
+// API — necesario al crear una actividad, que genera una fila "Sin
+// Respuesta" por cada compañerx activx (evita 60 llamadas individuales
+// y el riesgo de pisar la cuota de escritura de Sheets).
+export async function agregarFilas(rango: string, filas: (string | number)[][]): Promise<void> {
+  if (filas.length === 0) return;
   const { sheets, spreadsheetId } = getSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: rango,
     valueInputOption: 'RAW',
-    requestBody: { values: [valores] },
+    requestBody: { values: filas },
   });
 }
 

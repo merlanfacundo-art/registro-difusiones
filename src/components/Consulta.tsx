@@ -51,7 +51,10 @@ export function Consulta() {
     });
   }
 
+  const hayFiltroDropdownActivo = Boolean(fCompanerx || fActividad || fArea);
+
   const filtrados = useMemo(() => {
+    if (!hayFiltroDropdownActivo) return [];
     return datos.filter((d) => {
       if (fCompanerx && d.compañerx !== fCompanerx) return false;
       if (fActividad && d.actividad !== fActividad) return false;
@@ -61,7 +64,15 @@ export function Consulta() {
       if (fEstados.size > 0 && !fEstados.has(d.respuesta)) return false;
       return true;
     });
-  }, [datos, fCompanerx, fActividad, fArea, fDesde, fHasta, fEstados]);
+  }, [datos, hayFiltroDropdownActivo, fCompanerx, fActividad, fArea, fDesde, fHasta, fEstados]);
+
+  // Arma "Nombre (desde HH:mm; hasta HH:mm)" solo con las partes que tengan dato.
+  function formatConHorario(d: RespuestaConFila): string {
+    const partes: string[] = [];
+    if (d.horario_llegada) partes.push(`desde ${d.horario_llegada}`);
+    if (d.horario_salida) partes.push(`hasta ${d.horario_salida}`);
+    return partes.length > 0 ? `${d.compañerx} (${partes.join('; ')})` : d.compañerx;
+  }
 
   // El generador de WhatsApp exige una actividad puntual seleccionada, y usa
   // TODAS las respuestas de esa actividad (no el resto de los filtros activos)
@@ -84,12 +95,12 @@ export function Consulta() {
 
     let texto = `📋 *${fActividad}*${fechaFormateada ? ` (${fechaFormateada})` : ''}\n\n`;
     texto += `✅ Confirmadxs: ${confirmados.length}\n`;
-    texto += confirmados.map((c) => c.compañerx).join(', ') + '\n\n';
+    texto += confirmados.map(formatConHorario).join('\n') + '\n\n';
 
     texto += `📌 Otras respuestas: ${totalOtras}\n`;
     const agregarGrupo = (etiqueta: string, filas: RespuestaConFila[], incluirListado: boolean) => {
       if (filas.length === 0) return '';
-      const nombres = incluirListado ? `: ${filas.map((f) => f.compañerx).join(', ')}` : '';
+      const nombres = incluirListado ? '\n' + filas.map(formatConHorario).join('\n') : '';
       return `${etiqueta} (${filas.length})${nombres}\n`;
     };
     texto += agregarGrupo('No', no, incluirNo);
@@ -143,8 +154,11 @@ export function Consulta() {
           ))}
         </div>
 
-        <p style={{ color: '#777', fontSize: '0.85rem' }}>{filtrados.length} resultados</p>
+        <p style={{ color: '#777', fontSize: '0.85rem' }}>
+          {hayFiltroDropdownActivo ? `${filtrados.length} resultados` : 'Elegí compañerx, actividad o área para ver resultados.'}
+        </p>
 
+        {hayFiltroDropdownActivo && (
         <div className="tabla-scroll">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
             <thead>
@@ -173,6 +187,7 @@ export function Consulta() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       <div className="card superficie" style={{ alignSelf: 'start' }}>

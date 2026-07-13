@@ -12,6 +12,18 @@ Hecho:
 - Generador de mensaje de WhatsApp por actividad, con conteo de confirmados + listado, y conteo de "otras respuestas" (No / A confirmar / Sin Respuesta) con listado opcional por tipo. Excluye `N/A` (no convocadxs) del mensaje.
 - Endpoints `/api/usuarios`, `/api/companerxs`, `/api/actividades`, `/api/respuestas` (GET/POST/PATCH), con validación de rol server-side en las escrituras.
 - Adaptación mobile: layouts responsive (se apilan en pantallas angostas, tablas con scroll horizontal, menú hamburguesa) + PWA instalable (ícono en pantalla de inicio, `manifest.json` + service worker mínimo). El mismo código sirve para desktop y mobile, se adapta solo según el ancho de pantalla.
+- "Sin Respuesta" automático: al crear una actividad, se generan automáticamente filas "Sin Respuesta" para todxs lxs compañerxs activxs — nadie tiene que cargarlo a mano.
+- Consulta no muestra nada hasta elegir compañerx, actividad o área en los filtros (evita mezclar todo sin contexto).
+- Horario de llegada/salida (opcionales) por respuesta, validados contra la ventana de la actividad (hora de inicio / hora de fin si está definida).
+- Mensaje de WhatsApp: listado uno por línea (no separado por coma), con horario entre paréntesis cuando está cargado.
+- Filtro por área al elegir compañerx en Carga.
+
+## ⚠️ Nuevos pasos manuales pendientes en Google Sheets
+
+1. **Agregar `hora_fin` en la celda H1 de la hoja "Actividades"** (columna nueva, opcional).
+2. **Agregar `horario_llegada` en M1 y `horario_salida` en N1 de la hoja "Respuestas"** (columnas nuevas, opcionales).
+
+Como siempre, las filas ya cargadas quedan con esas celdas vacías — no se pierde nada.
 
 Todavía no implementado (próximos pasos de la secuencia):
 - Carga de estado post-actividad ✅/❌ (`/cierre`).
@@ -85,6 +97,8 @@ Esto levanta la app completa (frontend + `/api`) en `http://localhost:3000`.
 - Para instalarla desde el celular: abrir la URL de producción en Chrome (Android) o Safari (iOS), y usar "Agregar a pantalla de inicio" desde el menú del navegador. Chrome en Android también puede ofrecer un banner de instalación automático.
 - Los datos de `/api` nunca se cachean (el service worker los excluye explícitamente) — siempre se piden en vivo a Google Sheets, para no mostrar información desactualizada.
 - El ícono (`public/icon-192.png`, `public/icon-512.png`) es un placeholder simple con la paleta de marca ("RD" sobre fondo azul) — si en algún momento tenés un logo real de Patria Grande en el formato adecuado, se puede reemplazar fácilmente.
+
+- **"Sin Respuesta" automático (Opción A, materializado):** se generan filas físicas reales en "Respuestas" al crear la actividad, con `cargado_por = "sistema"`. Trade-off aceptado conscientemente: si un compañerx se da de alta en "Compañerxs" DESPUÉS de creada una actividad, no va a tener su fila "Sin Respuesta" para esa actividad — pero sí se crea normalmente la primera vez que alguien cargue una respuesta suya (el fallback de creación en `/api/respuestas` POST sigue funcionando igual).
 
 ## Convenciones importantes
 

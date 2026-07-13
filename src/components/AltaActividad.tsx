@@ -6,6 +6,7 @@ export function AltaActividad() {
   const [nombre, setNombre] = useState('');
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
+  const [horaFin, setHoraFin] = useState('');
   const [area, setArea] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export function AltaActividad() {
       const res = await fetch('/api/actividades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, fecha, hora, área: area, creada_por: usuario?.email }),
+        body: JSON.stringify({ nombre, fecha, hora, hora_fin: horaFin, área: area, creada_por: usuario?.email }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -34,6 +35,7 @@ export function AltaActividad() {
         setNombre('');
         setFecha('');
         setHora('');
+        setHoraFin('');
         setArea('');
       }
     } catch {
@@ -49,7 +51,16 @@ export function AltaActividad() {
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <input placeholder="Nombre de la actividad" value={nombre} onChange={(e) => setNombre(e.target.value)} />
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-        <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '0.8rem', color: '#555' }}>Hora de inicio</label>
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} style={{ width: '100%' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '0.8rem', color: '#555' }}>Hora de fin (opcional)</label>
+            <input type="time" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} style={{ width: '100%' }} />
+          </div>
+        </div>
         <input placeholder="Área (opcional)" value={area} onChange={(e) => setArea(e.target.value)} />
         <button type="submit" disabled={guardando}>{guardando ? 'Creando...' : 'Crear actividad'}</button>
         {mensaje && <p className="badge-exito">{mensaje}</p>}

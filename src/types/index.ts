@@ -18,17 +18,20 @@ export interface Respuesta {
   comentario: string;
   estado_post: EstadoPost;
   fecha_carga: string; // timestamp ISO, lo completa el backend
-  cargado_por: string; // email de quien carga
+  cargado_por: string; // email de quien carga (o "sistema" si se generó automáticamente)
+  horario_llegada: string; // HH:mm, opcional
+  horario_salida: string; // HH:mm, opcional
 }
 
 export interface Actividad {
   id_actividad: string;
   nombre: string;
   fecha: string;
-  hora: string;
+  hora: string; // hora de inicio
   área: string;
   creada_por: string;
   fecha_creacion: string;
+  hora_fin: string; // opcional, HH:mm
 }
 
 // Vigente = todavía no empezó (fecha+hora de inicio en el futuro respecto de "ahora").
@@ -37,6 +40,16 @@ export interface Actividad {
 export function actividadVigente(actividad: Actividad, ahora: Date = new Date()): boolean {
   const inicio = new Date(`${actividad.fecha}T${actividad.hora}`);
   return inicio.getTime() > ahora.getTime();
+}
+
+// Los horarios de llegada/salida tienen que estar dentro de la ventana de
+// la actividad: nunca antes del inicio, y si hay hora de fin definida,
+// nunca después de esa hora.
+export function horarioValido(horario: string, actividad: Actividad): boolean {
+  if (!horario) return true; // es opcional, vacío siempre es válido
+  if (horario < actividad.hora) return false;
+  if (actividad.hora_fin && horario > actividad.hora_fin) return false;
+  return true;
 }
 
 export interface Usuario {

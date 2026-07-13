@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSheetsClient, agregarFila, actualizarCelda } from './_lib/sheets.js';
 import { verificarPuedeEscribir } from './_lib/auth.js';
 
-const RANGO = 'Respuestas!A:L';
+const RANGO = 'Respuestas!A:N';
 const COLUMNAS = [
   'id_respuesta',
   'compañerx',
@@ -16,6 +16,8 @@ const COLUMNAS = [
   'fecha_carga',
   'cargado_por',
   'id_actividad',
+  'horario_llegada',
+  'horario_salida',
 ] as const;
 
 // GET  /api/respuestas            -> todas las filas, con su número de fila real
@@ -70,6 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fecha_carga,
       body.cargado_por,
       body.id_actividad,
+      body.horario_llegada || '',
+      body.horario_salida || '',
     ]);
 
     return res.status(201).json({ id_respuesta, fecha_carga });
@@ -77,9 +81,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'PATCH') {
     const fila = Number(req.query.fila);
-    const { estado_post, respuesta, comentario, actor_email } = req.body;
-    if (!fila || (!estado_post && !respuesta && comentario === undefined)) {
-      return res.status(400).json({ error: 'Faltan los parámetros: fila y al menos uno de estado_post/respuesta/comentario' });
+    const { estado_post, respuesta, comentario, horario_llegada, horario_salida, actor_email } = req.body;
+    const hayAlgoParaActualizar =
+      estado_post !== undefined || respuesta !== undefined || comentario !== undefined ||
+      horario_llegada !== undefined || horario_salida !== undefined;
+    if (!fila || !hayAlgoParaActualizar) {
+      return res.status(400).json({ error: 'Faltan los parámetros: fila y al menos un campo a actualizar' });
     }
 
     const autorizado = await verificarPuedeEscribir(actor_email);
@@ -87,10 +94,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'El usuario no tiene permiso para editar esta respuesta' });
     }
 
-    // Columnas fijas según COLUMNAS: G=respuesta, H=comentario, I=estado_post
+    // Columnas fijas según COLUMNAS: G=respuesta, H=comentario, I=estado_post, M=horario_llegada, N=horario_salida
     if (respuesta !== undefined) await actualizarCelda(`Respuestas!G${fila}`, respuesta);
     if (comentario !== undefined) await actualizarCelda(`Respuestas!H${fila}`, comentario);
     if (estado_post !== undefined) await actualizarCelda(`Respuestas!I${fila}`, estado_post);
+    if (horario_llegada !== undefined) await actualizarCelda(`Respuestas!M${fila}`, horario_llegada);
+    if (horario_salida !== undefined) await actualizarCelda(`Respuestas!N${fila}`, horario_salida);
 
     return res.status(200).json({ ok: true });
   }
