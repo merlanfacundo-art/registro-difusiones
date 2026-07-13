@@ -93,3 +93,40 @@ export async function actualizarCelda(rango: string, valor: string): Promise<voi
     requestBody: { values: [[valor]] },
   });
 }
+
+// Crea una hoja (tab) nueva con el nombre indicado si todavía no existe.
+// Usado por Resumen mensual para escribir en una solapa propia (ej. "Julio
+// (auto)") en vez de tocar las solapas cargadas a mano — así no hay riesgo
+// de pisar datos existentes por un error de alineación de filas/columnas.
+export async function crearHojaSiNoExiste(nombreHoja: string): Promise<void> {
+  const { sheets, spreadsheetId } = getSheetsClient();
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+  const existe = metadata.data.sheets?.some((s) => s.properties?.title === nombreHoja);
+  if (existe) return;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: nombreHoja } } }],
+    },
+  });
+}
+
+// Borra todo el contenido de una hoja (para regenerarla desde cero) y
+// escribe una grilla 2D completa a partir de A1. El nombre de hoja se
+// encierra siempre entre comillas simples porque puede tener espacios
+// o paréntesis (ej. "Julio (auto)"), que rompen la notación A1 si van sueltos.
+export async function reescribirHoja(nombreHoja: string, filas: (string | number)[][]): Promise<void> {
+  const { sheets, spreadsheetId } = getSheetsClient();
+  const rangoHoja = `'${nombreHoja}'`;
+
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: rangoHoja });
+
+  if (filas.length === 0) return;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${rangoHoja}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: filas },
+  });
+}

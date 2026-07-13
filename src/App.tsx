@@ -6,7 +6,7 @@ import { CargaRespuestas } from './components/CargaRespuestas';
 import { AltaActividad } from './components/AltaActividad';
 import { Cierre } from './components/Cierre';
 import { Consulta } from './components/Consulta';
-import { Proximamente } from './components/Proximamente';
+import { Resumen } from './components/Resumen';
 import { puedeEscribir } from './types';
 
 function Rutas() {
@@ -35,7 +35,7 @@ function Rutas() {
           path="/cierre"
           element={escritura ? <Cierre /> : <Navigate to="/consulta" replace />}
         />
-        <Route path="/resumen" element={<Proximamente titulo="Resumen mensual (vista wide)" />} />
+        <Route path="/resumen" element={<Resumen />} />
         <Route path="*" element={<Navigate to={rutaPorDefecto} replace />} />
       </Routes>
     </Layout>
