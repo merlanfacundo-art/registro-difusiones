@@ -18,7 +18,7 @@ Hecho:
 - Mensaje de WhatsApp: listado uno por línea (no separado por coma), con horario entre paréntesis cuando está cargado.
 - Filtro por área al elegir compañerx en Carga.
 - Cierre post-actividad (`/cierre`): elegí una actividad ya pasada, marcá ✅/❌ por compañerx (independientemente de su respuesta original), guardado en bloque con manejo de errores por fila.
-- Resumen mensual (`/resumen`): genera/regenera una solapa nueva "`<Mes>` (auto)" en la planilla, con la vista wide tradicional (compañerxs × actividades del mes) armada a partir de lo cargado por la app. Cubre solo actividades/meses cargados a través de la app de acá en adelante — no reconstruye retroactivamente los meses viejos cargados a mano (Enero-Junio).
+- Resumen / Estadísticas (`/resumen`): tablero con filtros combinables (fecha, área, actividad, compañerx), métricas generales (actividades, confirmados, tasa de confirmación, tasa de efectividad — % de quienes confirmaron que realmente asistieron), gráfico de barras por actividad, y una tabla de detalle que cambia según el filtro: compañerxs de una actividad puntual, actividades de un compañerx puntual, o resumen agregado por actividad si no se acota a ninguno de los dos.
 
 ## ⚠️ Nuevos pasos manuales pendientes en Google Sheets
 
@@ -91,7 +91,7 @@ Esto levanta la app completa (frontend + `/api`) en `http://localhost:3000`.
 
 - **"Sin Respuesta" automático (Opción A, materializado):** se generan filas físicas reales en "Respuestas" al crear la actividad, con `cargado_por = "sistema"`. Trade-off aceptado conscientemente: si un compañerx se da de alta en "Compañerxs" DESPUÉS de creada una actividad, no va a tener su fila "Sin Respuesta" para esa actividad — pero sí se crea normalmente la primera vez que alguien cargue una respuesta suya (el fallback de creación en `/api/respuestas` POST sigue funcionando igual).
 
-- Resumen mensual escribe siempre en una solapa **nueva y separada** ("`<Mes>` (auto)"), nunca dentro de las solapas Enero-Julio ya cargadas a mano — decisión tomada deliberadamente para eliminar el riesgo de pisar datos reales por un error de alineación de filas/columnas. Cada vez que se "regenera", se borra y reescribe solo esa solapa auto-generada.
+- `/resumen` reemplazó por completo el enfoque anterior de "escribir una solapa nueva en Sheets" — ahora es un tablero dentro de la app, sin tocar Sheets para nada. El endpoint `api/resumen.ts` y las funciones `crearHojaSiNoExiste`/`reescribirHoja` en `api/_lib/sheets.ts` quedaron en el código (no se usan desde la UI) por si en algún momento se retoma la idea de exportar a Sheets como función aparte.
 
 ## Convenciones importantes
 
