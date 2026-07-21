@@ -13,6 +13,7 @@ export function Cierre() {
   const [cargando, setCargando] = useState(true);
 
   const [idActividad, setIdActividad] = useState('');
+  const [filtroArea, setFiltroArea] = useState('');
   // Ediciones pendientes: fila -> nuevo estado_post, hasta que se guarden
   const [cambios, setCambios] = useState<Record<number, EstadoPost>>({});
   const [guardando, setGuardando] = useState(false);
@@ -52,7 +53,14 @@ export function Cierre() {
   );
 
   const filasDeLaActividad = useMemo(
-    () => respuestas.filter((r) => r.id_actividad === idActividad),
+    () => respuestas.filter((r) => r.id_actividad === idActividad && (!filtroArea || r.área === filtroArea)),
+    [respuestas, idActividad, filtroArea]
+  );
+
+  // Áreas disponibles para filtrar: solo las presentes en la actividad
+  // elegida, así no aparecen opciones vacías sin sentido para esa actividad.
+  const areasDeLaActividad = useMemo(
+    () => [...new Set(respuestas.filter((r) => r.id_actividad === idActividad).map((r) => r.área))].filter(Boolean).sort(),
     [respuestas, idActividad]
   );
 
@@ -121,7 +129,7 @@ export function Cierre() {
 
       <div style={{ marginBottom: '1rem', maxWidth: 420 }}>
         <label style={{ fontSize: '0.85rem', color: '#555' }}>Actividad (ya realizadas)</label>
-        <select value={idActividad} onChange={(e) => { setIdActividad(e.target.value); setCambios({}); }} style={{ width: '100%' }}>
+        <select value={idActividad} onChange={(e) => { setIdActividad(e.target.value); setCambios({}); setFiltroArea(''); }} style={{ width: '100%' }}>
           <option value="">Elegí una actividad</option>
           {actividadesPasadas.map((a) => (
             <option key={a.id_actividad} value={a.id_actividad}>
@@ -136,6 +144,15 @@ export function Cierre() {
 
       {idActividad && (
         <>
+          {areasDeLaActividad.length > 1 && (
+            <div style={{ marginBottom: '1rem', maxWidth: 300 }}>
+              <label style={{ fontSize: '0.85rem', color: '#555' }}>Filtrar por área</label>
+              <select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={{ width: '100%' }}>
+                <option value="">Todas las áreas</option>
+                {areasDeLaActividad.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          )}
           <div className="tabla-scroll">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>

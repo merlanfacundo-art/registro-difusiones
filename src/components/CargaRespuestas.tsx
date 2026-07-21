@@ -114,20 +114,16 @@ export function CargaRespuestas() {
   const erroresHorario = useMemo(() => {
     if (!actividadElegida) return [];
     const errores: string[] = [];
-    if (!horarioValido(horarioLlegada, actividadElegida)) {
-      errores.push(
-        actividadElegida.hora_fin
-          ? `El horario de llegada debe estar entre ${actividadElegida.hora} y ${actividadElegida.hora_fin}.`
-          : `El horario de llegada debe ser ${actividadElegida.hora} o posterior.`
-      );
-    }
-    if (!horarioValido(horarioSalida, actividadElegida)) {
-      errores.push(
-        actividadElegida.hora_fin
-          ? `El horario de salida debe estar entre ${actividadElegida.hora} y ${actividadElegida.hora_fin}.`
-          : `El horario de salida debe ser ${actividadElegida.hora} o posterior.`
-      );
-    }
+    const cruzaMedianoche = actividadElegida.hora_fin && actividadElegida.hora_fin < actividadElegida.hora;
+    const mensajeRango = (campo: string) => {
+      if (!actividadElegida.hora_fin) return `El horario de ${campo} debe ser ${actividadElegida.hora} o posterior.`;
+      if (cruzaMedianoche) {
+        return `El horario de ${campo} debe ser ${actividadElegida.hora} o posterior, o ${actividadElegida.hora_fin} o anterior (la actividad cruza la medianoche).`;
+      }
+      return `El horario de ${campo} debe estar entre ${actividadElegida.hora} y ${actividadElegida.hora_fin}.`;
+    };
+    if (!horarioValido(horarioLlegada, actividadElegida)) errores.push(mensajeRango('llegada'));
+    if (!horarioValido(horarioSalida, actividadElegida)) errores.push(mensajeRango('salida'));
     return errores;
   }, [horarioLlegada, horarioSalida, actividadElegida]);
 
