@@ -3,7 +3,8 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { Layout } from './components/Layout';
 import { CargaRespuestas } from './components/CargaRespuestas';
-import { AltaActividad } from './components/AltaActividad';
+import { Actividades } from './components/Actividades';
+import { Companerxs } from './components/Companerxs';
 import { Cierre } from './components/Cierre';
 import { Consulta } from './components/Consulta';
 import { Resumen } from './components/Resumen';
@@ -28,7 +29,11 @@ function Rutas() {
         />
         <Route
           path="/actividades"
-          element={escritura ? <AltaActividad /> : <Navigate to="/consulta" replace />}
+          element={escritura ? <Actividades /> : <Navigate to="/consulta" replace />}
+        />
+        <Route
+          path="/companerxs"
+          element={escritura ? <Companerxs /> : <Navigate to="/consulta" replace />}
         />
         <Route path="/consulta" element={<Consulta />} />
         <Route

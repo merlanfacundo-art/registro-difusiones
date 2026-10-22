@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { actividadVigente } from '../types';
+import { actividadActiva, actividadVigente } from '../types';
 import type { Actividad, EstadoPost, Respuesta } from '../types';
 
 type RespuestaConFila = Respuesta & { _fila: number };
@@ -15,7 +15,7 @@ export function Cierre() {
   const [idActividad, setIdActividad] = useState('');
   const [filtroArea, setFiltroArea] = useState('');
   // Ediciones pendientes: fila -> nuevo estado_post, hasta que se guarden
-  const [cambios, setCambios] = useState<Record<number, EstadoPost>>({});
+  const [cambios, setCambios] = useState<Record<string, EstadoPost>>({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [errores, setErrores] = useState<string[]>([]);
@@ -48,7 +48,7 @@ export function Cierre() {
   // que solo muestra vigentes. Ordenadas de la más reciente a la más vieja,
   // así lo más urgente de cerrar queda arriba.
   const actividadesPasadas = useMemo(
-    () => actividades.filter((a) => !actividadVigente(a)).sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    () => actividades.filter((a) => actividadActiva(a) && !actividadVigente(a)).sort((a, b) => b.fecha.localeCompare(a.fecha)),
     [actividades]
   );
 
@@ -64,8 +64,8 @@ export function Cierre() {
     [respuestas, idActividad]
   );
 
-  function cambiarEstado(fila: number, valor: EstadoPost) {
-    setCambios((prev) => ({ ...prev, [fila]: valor }));
+  function cambiarEstado(idRespuesta: string, valor: EstadoPost) {
+    setCambios((prev) => ({ ...prev, [idRespuesta]: valor }));
   }
 
   async function guardarCambios() {
@@ -78,35 +78,27 @@ export function Cierre() {
     setMensaje(null);
     setErrores([]);
 
-    const erroresNuevos: string[] = [];
-    let exitosos = 0;
-
-    for (const [filaStr, estado_post] of entradas) {
-      try {
-        const res = await fetch(`/api/respuestas?fila=${filaStr}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ estado_post, actor_email: usuario?.email }),
-        });
-        if (res.ok) {
-          exitosos++;
-        } else {
-          const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          erroresNuevos.push(`Fila ${filaStr}: ${data.error ?? 'error desconocido'}`);
-        }
-      } catch {
-        erroresNuevos.push(`Fila ${filaStr}: fallo de red`);
-      }
-    }
-
-    setGuardando(false);
-    setErrores(erroresNuevos);
-    setMensaje(exitosos > 0 ? `Se guardaron ${exitosos} de ${entradas.length} cambios.` : null);
-
-    if (erroresNuevos.length === 0) {
+    // Todo el cierre en UNA escritura (cuota de Sheets: 60/min compartidas
+    // por toda la app). Es todo o nada: si falla, no queda a medias.
+    try {
+      const res = await fetch('/api/respuestas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cambios: entradas.map(([id_respuesta, estado_post]) => ({ id_respuesta, estado_post })),
+          actor_email: usuario?.email,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Error HTTP ${res.status}`);
+      setMensaje(`Se guardaron ${entradas.length} cambios.`);
       setCambios({});
       const actualizado = await fetch('/api/respuestas').then((r) => r.json());
       setRespuestas(actualizado);
+    } catch (e) {
+      setErrores([e instanceof Error ? e.message : 'Fallo de red al guardar']);
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -164,13 +156,13 @@ export function Cierre() {
               </thead>
               <tbody>
                 {filasDeLaActividad.map((r) => (
-                  <tr key={r._fila} style={{ borderBottom: '1px solid var(--color-borde)' }}>
+                  <tr key={r.id_respuesta} style={{ borderBottom: '1px solid var(--color-borde)' }}>
                     <td style={{ padding: '0.3rem' }}>{r.compañerx}</td>
                     <td style={{ color: '#777' }}>{r.respuesta}</td>
                     <td>
                       <select
-                        value={cambios[r._fila] ?? r.estado_post ?? ''}
-                        onChange={(e) => cambiarEstado(r._fila, e.target.value as EstadoPost)}
+                        value={cambios[r.id_respuesta] ?? r.estado_post ?? ''}
+                        onChange={(e) => cambiarEstado(r.id_respuesta, e.target.value as EstadoPost)}
                       >
                         <option value="">—</option>
                         <option value="✅">✅</option>

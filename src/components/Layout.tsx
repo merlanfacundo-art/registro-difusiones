@@ -12,11 +12,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const links = (
     <>
-      {escritura && <NavLink to="/actividades" onClick={() => setMenuAbierto(false)}>Nueva actividad</NavLink>}
+      {escritura && <NavLink to="/actividades" onClick={() => setMenuAbierto(false)}>Actividades</NavLink>}
       {escritura && <NavLink to="/carga" onClick={() => setMenuAbierto(false)}>Cargar respuestas</NavLink>}
       <NavLink to="/consulta" onClick={() => setMenuAbierto(false)}>Consultar</NavLink>
       {escritura && <NavLink to="/cierre" onClick={() => setMenuAbierto(false)}>Cierre post-actividad</NavLink>}
       <NavLink to="/resumen" onClick={() => setMenuAbierto(false)}>Estadísticas</NavLink>
+      {escritura && <NavLink to="/companerxs" onClick={() => setMenuAbierto(false)}>Compañerxs</NavLink>}
     </>
   );
 

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { actividadVigente, horarioValido } from '../types';
+import { actividadActiva, actividadVigente, horarioValido } from '../types';
+import { aMinutos } from '../lib/horas';
+import { SelectorHora } from './SelectorHora';
+import { CargaPorArea } from './CargaPorArea';
 import type { Companerx, RespuestaValor, Actividad } from '../types';
 
 const OPCIONES_RESPUESTA: RespuestaValor[] = ['Si', 'No', 'A confirmar', 'N/A', 'Sin Respuesta'];
 
 interface RespuestaExistente {
-  _fila: number;
+  id_respuesta: string;
   respuesta: RespuestaValor | '';
   comentario: string;
   horario_llegada: string;
@@ -18,7 +21,7 @@ export function CargaRespuestas() {
   const [companerxs, setCompanerxs] = useState<Companerx[]>([]);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [respuestasExistentes, setRespuestasExistentes] = useState<
-    { id_actividad: string; compañerx: string; _fila: number; respuesta: string; comentario: string; horario_llegada: string; horario_salida: string }[]
+    { id_respuesta: string; id_actividad: string; compañerx: string; _fila: number; respuesta: string; comentario: string; horario_llegada: string; horario_salida: string }[]
   >([]);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
@@ -32,6 +35,11 @@ export function CargaRespuestas() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
+
+  async function recargarRespuestas() {
+    const actualizado = await fetch('/api/respuestas').then((r) => r.json());
+    setRespuestasExistentes(actualizado);
+  }
 
   useEffect(() => {
     async function cargarTodo() {
@@ -64,7 +72,7 @@ export function CargaRespuestas() {
 
   // Solo actividades vigentes (todavía no empezaron) pueden recibir carga/edición.
   const actividadesVigentes = useMemo(
-    () => actividades.filter((a) => actividadVigente(a)).sort((a, b) => a.fecha.localeCompare(b.fecha)),
+    () => actividades.filter((a) => actividadActiva(a) && actividadVigente(a)).sort((a, b) => a.fecha.localeCompare(b.fecha)),
     [actividades]
   );
 
@@ -89,7 +97,7 @@ export function CargaRespuestas() {
     );
     if (!fila) return null;
     return {
-      _fila: fila._fila,
+      id_respuesta: fila.id_respuesta,
       respuesta: fila.respuesta as RespuestaValor,
       comentario: fila.comentario,
       horario_llegada: fila.horario_llegada || '',
@@ -114,7 +122,8 @@ export function CargaRespuestas() {
   const erroresHorario = useMemo(() => {
     if (!actividadElegida) return [];
     const errores: string[] = [];
-    const cruzaMedianoche = actividadElegida.hora_fin && actividadElegida.hora_fin < actividadElegida.hora;
+    const ini = aMinutos(actividadElegida.hora), fin = aMinutos(actividadElegida.hora_fin);
+    const cruzaMedianoche = ini !== null && fin !== null && fin < ini;
     const mensajeRango = (campo: string) => {
       if (!actividadElegida.hora_fin) return `El horario de ${campo} debe ser ${actividadElegida.hora} o posterior.`;
       if (cruzaMedianoche) {
@@ -145,14 +154,19 @@ export function CargaRespuestas() {
     try {
       let res: Response;
       if (existente) {
-        res = await fetch(`/api/respuestas?fila=${existente._fila}`, {
+        // Se identifica la fila por su id (no por número de fila): si la
+        // planilla cambió mientras la pantalla estaba abierta, no se pisa otra.
+        res = await fetch('/api/respuestas', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            respuesta,
-            comentario,
-            horario_llegada: horarioLlegada,
-            horario_salida: horarioSalida,
+            cambios: [{
+              id_respuesta: existente.id_respuesta,
+              respuesta,
+              comentario,
+              horario_llegada: horarioLlegada,
+              horario_salida: horarioSalida,
+            }],
             actor_email: usuario?.email,
           }),
         });
@@ -181,8 +195,7 @@ export function CargaRespuestas() {
         setErrorGuardado(data.error ?? 'Error desconocido');
       } else {
         setMensaje(existente ? 'Respuesta actualizada.' : 'Respuesta guardada.');
-        const actualizado = await fetch('/api/respuestas').then((r) => r.json());
-        setRespuestasExistentes(actualizado);
+        await recargarRespuestas();
       }
     } catch {
       setErrorGuardado('Fallo de red al guardar.');
@@ -200,6 +213,7 @@ export function CargaRespuestas() {
   }
 
   return (
+    <>
     <div className="card">
       <h2 style={{ color: 'var(--color-primario)' }}>Cargar / modificar respuesta</h2>
 
@@ -216,7 +230,7 @@ export function CargaRespuestas() {
           </select>
           {actividadesVigentes.length === 0 && (
             <p style={{ fontSize: '0.8rem', color: '#777' }}>
-              No hay actividades vigentes. Creá una en "Nueva actividad".
+              No hay actividades vigentes. Creá una en "Actividades".
             </p>
           )}
         </div>
@@ -264,21 +278,11 @@ export function CargaRespuestas() {
                 Horario de llegada (opcional){actividadElegida && ` — desde ${actividadElegida.hora}`}
                 {actividadElegida?.hora_fin && ` hasta ${actividadElegida.hora_fin}`}
               </label>
-              <input
-                type="time"
-                value={horarioLlegada}
-                onChange={(e) => setHorarioLlegada(e.target.value)}
-                style={{ width: '100%' }}
-              />
+              <SelectorHora valor={horarioLlegada} onChange={setHorarioLlegada} />
             </div>
             <div>
               <label style={{ fontSize: '0.8rem', color: '#555' }}>Horario de salida (opcional)</label>
-              <input
-                type="time"
-                value={horarioSalida}
-                onChange={(e) => setHorarioSalida(e.target.value)}
-                style={{ width: '100%' }}
-              />
+              <SelectorHora valor={horarioSalida} onChange={setHorarioSalida} />
             </div>
           </div>
           {erroresHorario.map((e, i) => <p key={i} className="badge-acento" style={{ fontSize: '0.8rem' }}>{e}</p>)}
@@ -292,5 +296,12 @@ export function CargaRespuestas() {
       {mensaje && <p className="badge-exito" style={{ marginTop: '0.75rem' }}>{mensaje}</p>}
       {errorGuardado && <p className="badge-acento" style={{ marginTop: '0.75rem' }}>{errorGuardado}</p>}
     </div>
+    <CargaPorArea
+      actividades={actividadesVigentes}
+      companerxs={companerxs}
+      respuestas={respuestasExistentes}
+      onGuardado={recargarRespuestas}
+    />
+    </>
   );
 }

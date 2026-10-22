@@ -1,3 +1,5 @@
+import { aMinutos, normalizarHora } from '../lib/horas.js';
+
 // Tipos del dominio, reflejando exactamente las columnas de las 3 hojas
 // en "Organización 2026". Los valores de los enums deben matchear
 // EXACTO los menús desplegables configurados en Sheets (mayúscula inicial).
@@ -32,24 +34,37 @@ export interface Actividad {
   creada_por: string;
   fecha_creacion: string;
   hora_fin: string; // opcional, HH:mm
+  estado: string; // '' o 'activa' = activa; 'eliminada' = baja lógica (reversible)
+}
+
+// Baja lógica: una actividad eliminada se excluye de carga, cierre,
+// consulta y estadísticas, pero sus filas siguen en la planilla.
+export function actividadActiva(actividad: Pick<Actividad, 'estado'>): boolean {
+  return (actividad.estado ?? '').trim().toLowerCase() !== 'eliminada';
 }
 
 // Vigente = todavía no empezó (fecha+hora de inicio en el futuro respecto de "ahora").
 // Una vez que arrancó, ya no se puede cargar ni modificar respuestas — solo
 // queda disponible el Cierre post-actividad (✅/❌).
 export function actividadVigente(actividad: Actividad, ahora: Date = new Date()): boolean {
-  const inicio = new Date(`${actividad.fecha}T${actividad.hora}`);
+  const hora = normalizarHora(actividad.hora) ?? '00:00';
+  const inicio = new Date(`${actividad.fecha}T${hora}`);
   return inicio.getTime() > ahora.getTime();
 }
 
 // Los horarios de llegada/salida tienen que estar dentro de la ventana de
-// la actividad: nunca antes del inicio, y si hay hora de fin definida,
-// nunca después de esa hora.
-export function horarioValido(horario: string, actividad: Actividad): boolean {
+// la actividad. Si la actividad cruza la medianoche (ej. 21:00 a 02:00),
+// el rango se "envuelve": vale lo posterior al inicio O lo anterior al fin.
+// Se compara en minutos, nunca como texto.
+export function horarioValido(horario: string, actividad: Pick<Actividad, 'hora' | 'hora_fin'>): boolean {
   if (!horario) return true; // es opcional, vacío siempre es válido
-  if (horario < actividad.hora) return false;
-  if (actividad.hora_fin && horario > actividad.hora_fin) return false;
-  return true;
+  const h = aMinutos(horario);
+  if (h === null) return false; // formato no interpretable
+  const inicio = aMinutos(actividad.hora);
+  const fin = aMinutos(actividad.hora_fin);
+  if (inicio === null) return true; // sin hora de inicio legible no hay contra qué validar
+  if (fin === null) return h >= inicio;
+  return fin < inicio ? h >= inicio || h <= fin : h >= inicio && h <= fin;
 }
 
 export interface Usuario {

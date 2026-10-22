@@ -1,107 +1,101 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSheetsClient, agregarFila, actualizarCelda } from './_lib/sheets.js';
+import { agregarFila, actualizarRangos } from './_lib/sheets.js';
 import { verificarPuedeEscribir } from './_lib/auth.js';
+import {
+  RANGO_RESPUESTAS, COL_RESPUESTA, RESPUESTAS_VALIDAS, ESTADOS_POST_VALIDOS,
+  leerRespuestas, leerActividades, esEliminada, mismoNombre, filaRespuesta,
+} from './_lib/dominio.js';
+import { normalizarHora } from '../src/lib/horas.js';
 
-const RANGO = 'Respuestas!A:N';
-const COLUMNAS = [
-  'id_respuesta',
-  'compañerx',
-  'actividad',
-  'área',
-  'fecha',
-  'hora',
-  'respuesta',
-  'comentario',
-  'estado_post',
-  'fecha_carga',
-  'cargado_por',
-  'id_actividad',
-  'horario_llegada',
-  'horario_salida',
-] as const;
+type Campo = keyof typeof COL_RESPUESTA;
+const EDITABLES: Campo[] = ['respuesta', 'comentario', 'estado_post', 'horario_llegada', 'horario_salida'];
 
-// GET  /api/respuestas            -> todas las filas, con su número de fila real
-// POST /api/respuestas            -> agrega una nueva respuesta
-// PATCH /api/respuestas?fila=N    -> actualiza el estado_post (✅/❌) de la fila N
+// Normaliza un horario opcional: '' borra; un valor ilegible es error.
+function horarioOpcional(valor: unknown): { ok: true; valor: string } | { ok: false } {
+  const texto = valor === undefined || valor === null ? '' : String(valor).trim();
+  if (!texto) return { ok: true, valor: '' };
+  const n = normalizarHora(texto);
+  return n ? { ok: true, valor: n } : { ok: false };
+}
+
+// GET   /api/respuestas -> todas las filas, excluyendo las de actividades eliminadas
+// POST  /api/respuestas -> alta de una respuesta (si ya existe para ese par, 409)
+// PATCH /api/respuestas -> { cambios: [{ id_respuesta, ...campos }], actor_email }
+//                          Ubica cada fila por su id justo antes de escribir y
+//                          aplica todo en UNA escritura. Si algún id no existe,
+//                          no escribe nada (todo o nada).
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
-    const { sheets, spreadsheetId } = getSheetsClient();
-    const result = await sheets.spreadsheets.values.get({ spreadsheetId, range: RANGO });
-    const filas = result.data.values ?? [];
-    const [, ...datos] = filas; // saltea encabezado
-
-    const respuestas = datos.map((fila, i) => {
-      const obj: Record<string, string> = {};
-      COLUMNAS.forEach((col, j) => { obj[col] = fila[j] ?? ''; });
-      // fila real en la hoja (fila 1 = encabezado, datos arrancan en fila 2)
-      return { ...obj, _fila: i + 2 };
-    });
-
-    return res.status(200).json(respuestas);
+    const [respuestas, actividades] = await Promise.all([leerRespuestas(), leerActividades()]);
+    const eliminadas = new Set(actividades.filter(esEliminada).map((a) => a.id_actividad));
+    return res.status(200).json(respuestas.filter((r) => !eliminadas.has(r.id_actividad)));
   }
 
   if (req.method === 'POST') {
-    const body = req.body;
-    const requeridos = ['id_actividad', 'compañerx', 'actividad', 'fecha', 'hora', 'respuesta', 'cargado_por'];
-    const faltantes = requeridos.filter((campo) => !body[campo]);
-    if (faltantes.length > 0) {
-      return res.status(400).json({ error: `Faltan campos: ${faltantes.join(', ')}` });
-    }
-
-    // Validación server-side: cargado_por debe pertenecer a un rol con
-    // permiso de escritura. No basta con que el frontend oculte el botón:
-    // si alguien llama a este endpoint directo, igual queda bloqueado acá.
-    const autorizado = await verificarPuedeEscribir(body.cargado_por);
-    if (!autorizado) {
+    const body = req.body ?? {};
+    const faltantes = ['id_actividad', 'compañerx', 'respuesta', 'cargado_por'].filter((c) => !body[c]);
+    if (faltantes.length) return res.status(400).json({ error: `Faltan campos: ${faltantes.join(', ')}` });
+    if (!(await verificarPuedeEscribir(body.cargado_por))) {
       return res.status(403).json({ error: 'El usuario no tiene permiso para cargar respuestas' });
     }
+    if (!RESPUESTAS_VALIDAS.includes(body.respuesta)) return res.status(400).json({ error: 'Respuesta inválida' });
+    const llegada = horarioOpcional(body.horario_llegada);
+    const salida = horarioOpcional(body.horario_salida);
+    if (!llegada.ok || !salida.ok) return res.status(400).json({ error: 'Formato de horario inválido' });
 
-    const id_respuesta = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const fecha_carga = new Date().toISOString();
+    const [actividades, respuestas] = await Promise.all([leerActividades(), leerRespuestas()]);
+    const actividad = actividades.find((a) => a.id_actividad === body.id_actividad);
+    if (!actividad || esEliminada(actividad)) return res.status(404).json({ error: 'La actividad no existe o fue eliminada' });
+    if (respuestas.some((r) => r.id_actividad === actividad.id_actividad && mismoNombre(r['compañerx'], body['compañerx']))) {
+      return res.status(409).json({ error: 'Ya existe una respuesta para esa persona en esta actividad. Recargá la página.' });
+    }
 
-    await agregarFila(RANGO, [
-      id_respuesta,
-      body.compañerx,
-      body.actividad,
-      body.área,
-      body.fecha,
-      body.hora,
-      body.respuesta,
-      body.comentario || '',
-      '', // estado_post se completa después de la actividad
-      fecha_carga,
-      body.cargado_por,
-      body.id_actividad,
-      body.horario_llegada || '',
-      body.horario_salida || '',
-    ]);
-
-    return res.status(201).json({ id_respuesta, fecha_carga });
+    // Nombre, fecha y hora se toman del catálogo (no del navegador), para
+    // que la copia en Respuestas siempre coincida con la actividad.
+    await agregarFila(RANGO_RESPUESTAS, filaRespuesta({
+      compañerx: body['compañerx'], area: body['área'] ?? '', actividad,
+      respuesta: body.respuesta, cargado_por: body.cargado_por, comentario: body.comentario ?? '',
+      horario_llegada: llegada.valor, horario_salida: salida.valor,
+    }));
+    return res.status(201).json({ ok: true });
   }
 
   if (req.method === 'PATCH') {
-    const fila = Number(req.query.fila);
-    const { estado_post, respuesta, comentario, horario_llegada, horario_salida, actor_email } = req.body;
-    const hayAlgoParaActualizar =
-      estado_post !== undefined || respuesta !== undefined || comentario !== undefined ||
-      horario_llegada !== undefined || horario_salida !== undefined;
-    if (!fila || !hayAlgoParaActualizar) {
-      return res.status(400).json({ error: 'Faltan los parámetros: fila y al menos un campo a actualizar' });
+    const { cambios, actor_email } = req.body ?? {};
+    if (!Array.isArray(cambios) || cambios.length === 0) return res.status(400).json({ error: 'No hay cambios para aplicar' });
+    if (!(await verificarPuedeEscribir(actor_email))) {
+      return res.status(403).json({ error: 'El usuario no tiene permiso para editar respuestas' });
     }
 
-    const autorizado = await verificarPuedeEscribir(actor_email);
-    if (!autorizado) {
-      return res.status(403).json({ error: 'El usuario no tiene permiso para editar esta respuesta' });
+    const porId = new Map((await leerRespuestas()).map((r) => [r.id_respuesta, r]));
+    const rangos: { rango: string; valores: string[][] }[] = [];
+    const ahora = new Date().toISOString();
+
+    for (const cambio of cambios) {
+      const fila = porId.get(cambio.id_respuesta)?._fila;
+      if (!fila) return res.status(409).json({ error: 'Alguna respuesta ya no existe en la planilla. Recargá la página.' });
+
+      for (const campo of EDITABLES) {
+        if (cambio[campo] === undefined) continue;
+        let valor = String(cambio[campo] ?? '');
+        if (campo === 'respuesta' && !RESPUESTAS_VALIDAS.includes(valor)) return res.status(400).json({ error: 'Respuesta inválida' });
+        if (campo === 'estado_post' && !ESTADOS_POST_VALIDOS.includes(valor)) return res.status(400).json({ error: 'Estado post inválido' });
+        if (campo === 'horario_llegada' || campo === 'horario_salida') {
+          const h = horarioOpcional(valor);
+          if (!h.ok) return res.status(400).json({ error: 'Formato de horario inválido' });
+          valor = h.valor;
+        }
+        rangos.push({ rango: `Respuestas!${COL_RESPUESTA[campo]}${fila}`, valores: [[valor]] });
+      }
+      // Si cambia la respuesta, queda registrado quién y cuándo (esto además
+      // borra la marca de "baja" si la tenía: pasa a ser una carga manual).
+      if (cambio.respuesta !== undefined) {
+        rangos.push({ rango: `Respuestas!J${fila}:K${fila}`, valores: [[ahora, actor_email]] });
+      }
     }
 
-    // Columnas fijas según COLUMNAS: G=respuesta, H=comentario, I=estado_post, M=horario_llegada, N=horario_salida
-    if (respuesta !== undefined) await actualizarCelda(`Respuestas!G${fila}`, respuesta);
-    if (comentario !== undefined) await actualizarCelda(`Respuestas!H${fila}`, comentario);
-    if (estado_post !== undefined) await actualizarCelda(`Respuestas!I${fila}`, estado_post);
-    if (horario_llegada !== undefined) await actualizarCelda(`Respuestas!M${fila}`, horario_llegada);
-    if (horario_salida !== undefined) await actualizarCelda(`Respuestas!N${fila}`, horario_salida);
-
-    return res.status(200).json({ ok: true });
+    await actualizarRangos(rangos);
+    return res.status(200).json({ ok: true, actualizadas: cambios.length });
   }
 
   return res.status(405).json({ error: 'Método no permitido' });

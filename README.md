@@ -130,3 +130,27 @@ La lógica de cálculo vive en `src/lib/estadisticas.ts` (normalización de amba
 KPIs: Actividades, Si, No, A confirmar, Sin Respuesta, N/A, Tasa de confirmación (Si / Si+No+A confirmar+Sin Respuesta), ✅, ❌, Tasa de efectividad (✅ / Si, puede superar 100% porque ✅ marca a quien asistió aunque no haya confirmado). Cortes: actividad, compañerx, área, horario de llegada (solo sistema), mes, día de semana. Filtros combinables por fuente, mes, día, área, actividad y compañerx; con compañerx o actividad elegidos se muestra además el listado de detalle.
 
 **Pendiente de seguridad:** los endpoints de lectura (`/api/respuestas`, `/api/historico`, etc.) no validan quién llama; el login es del lado del navegador. Con estadísticas por persona disponibles, conviene agregar validación server-side también en las lecturas.
+
+
+## Gestión de actividades y compañerxs, carga por área (octubre 2026)
+
+- **Actividades** (`/actividades`): alta, edición y eliminación. Eliminar es una **baja lógica**: la columna `estado` de la hoja Actividades pasa a `eliminada`, y la actividad se excluye de carga, cierre, consulta y estadísticas (el GET de `/api/respuestas` ya filtra sus filas). Se puede restaurar. Editar propaga nombre, fecha y hora a todas sus filas de Respuestas en una sola escritura, e informa los horarios cargados que quedaron fuera del rango nuevo (no los modifica).
+- **Compañerxs** (`/companerxs`): alta de personas nuevas (activo = 1), baja (activo = 0) y reactivación (activo = 1). El nombre es el identificador en todo el sistema: tiene que ser único y no se edita desde la app. Efectos sobre actividades **vigentes** (activas y no empezadas), nunca sobre las pasadas:
+  - alta y reactivación: se agrega "Sin Respuesta" donde falte;
+  - baja: sus "Sin Respuesta" pasan a N/A, marcadas con `cargado_por = sistema:baja`;
+  - reactivación: solo esos N/A marcados vuelven a "Sin Respuesta" (los N/A cargados a mano no se tocan).
+- **Carga por área** (bloque en Cargar respuestas, `/api/respuestas-area`): misma respuesta para todxs lxs activxs de una o varias áreas, en actividades vigentes. Por defecto solo completa los "Sin Respuesta"; con la opción explícita reemplaza también respuestas ya cargadas.
+- **Horarios**: selector propio de 24 h (`SelectorHora`), igual en todos los dispositivos. Todo horario se normaliza a `HH:mm` (`src/lib/horas.ts`, compartido entre navegador y servidor) y se compara en minutos, contemplando actividades que cruzan la medianoche.
+
+### Escrituras en bloque y cuota de Sheets
+
+La API de Sheets permite 60 escrituras por minuto por usuario, y toda la app escribe con la misma service account. Cierre, edición de actividades, carga por área y alta/baja escriben en **una sola request** (`actualizarRangos` en `api/_lib/sheets.ts`). Las ediciones ubican cada fila por su id (`id_respuesta`, `id_actividad`, nombre) justo antes de escribir, no por el número de fila que tenía el navegador.
+
+### Pasos manuales en Sheets
+
+1. Hoja **Actividades**, celda **I1**: escribir `estado`. (El código lee por posición, pero el encabezado deja la planilla legible.)
+2. Hoja **Respuestas**, columna B (`compañerx`): la validación de datos apunta a `'Compañerxs'!A2:A66`. Ampliarla a `'Compañerxs'!A2:A1000` para que las personas nuevas queden dentro del rango.
+
+### Pruebas
+
+Los endpoints se probaron de punta a punta contra una planilla simulada en memoria (27 casos: normalización de horas, permisos, duplicados, carga por área con y sin reemplazo, propagación de ediciones, baja lógica, baja/reactivación con marca, alta en vigentes y no en pasadas).

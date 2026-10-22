@@ -130,3 +130,36 @@ export async function reescribirHoja(nombreHoja: string, filas: (string | number
     requestBody: { values: filas },
   });
 }
+
+// Lee un rango asignando las columnas por POSICIÓN (no por el texto del
+// encabezado), y agrega el número de fila real en la hoja (_fila).
+// Por posición, un encabezado con o sin tilde no rompe la lectura.
+export async function leerFilas<C extends string>(
+  rango: string,
+  columnas: readonly C[]
+): Promise<(Record<C, string> & { _fila: number })[]> {
+  const { sheets, spreadsheetId } = getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: rango });
+  const filas = res.data.values ?? [];
+  return filas.slice(1).map((fila, i) => {
+    const obj = {} as Record<C, string>;
+    columnas.forEach((col, j) => { obj[col] = fila[j] === undefined || fila[j] === null ? '' : String(fila[j]); });
+    return { ...obj, _fila: i + 2 }; // fila 1 = encabezado
+  });
+}
+
+// Escribe muchos rangos (de una o varias hojas) en UNA sola request.
+// Clave por la cuota de la API de Sheets: 60 escrituras por minuto por
+// usuario, y toda la app escribe con la misma service account. Un cierre de
+// 60 personas fila por fila agotaba el cupo; en bloque es 1 escritura.
+export async function actualizarRangos(cambios: { rango: string; valores: (string | number)[][] }[]): Promise<void> {
+  if (cambios.length === 0) return;
+  const { sheets, spreadsheetId } = getSheetsClient();
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: cambios.map((c) => ({ range: c.rango, values: c.valores })),
+    },
+  });
+}
