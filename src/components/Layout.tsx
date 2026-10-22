@@ -16,7 +16,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {escritura && <NavLink to="/carga" onClick={() => setMenuAbierto(false)}>Cargar respuestas</NavLink>}
       <NavLink to="/consulta" onClick={() => setMenuAbierto(false)}>Consultar</NavLink>
       {escritura && <NavLink to="/cierre" onClick={() => setMenuAbierto(false)}>Cierre post-actividad</NavLink>}
-      <NavLink to="/resumen" onClick={() => setMenuAbierto(false)}>Resumen mensual</NavLink>
+      <NavLink to="/resumen" onClick={() => setMenuAbierto(false)}>Estadísticas</NavLink>
     </>
   );
 

@@ -1,108 +1,105 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import type { Actividad, Respuesta } from '../types';
+import {
+  desdeHistorico, desdeSistema, calcularKpis, agruparPorCorte, formatPct,
+  CORTES, MESES, DIAS,
+  type Registro, type Corte, type FilaCorte, type Fuente,
+} from '../lib/estadisticas';
 
-type RespuestaConFila = Respuesta & { _fila: number };
+const COLORES = { Si: '#2E7D32', No: '#E32622', 'A confirmar': '#1A9DD7', 'Sin Respuesta': '#9AA0A6' };
+const MAX_FILAS_GRAFICO = 20;
 
-const COLOR_SI = '#2E7D32';
-const COLOR_NO = '#E32622';
-const COLOR_A_CONFIRMAR = '#1A9DD7';
-const COLOR_SIN_RESPUESTA = '#9AA0A6';
+type ColumnaOrden = keyof FilaCorte;
 
-function formatPct(n: number): string {
-  return `${Math.round(n * 100)}%`;
+const COLUMNAS: { clave: ColumnaOrden; etiqueta: string; pct?: boolean }[] = [
+  { clave: 'actividades', etiqueta: 'Actividades' },
+  { clave: 'si', etiqueta: 'Si' },
+  { clave: 'no', etiqueta: 'No' },
+  { clave: 'aConfirmar', etiqueta: 'A confirmar' },
+  { clave: 'sinRespuesta', etiqueta: 'Sin Respuesta' },
+  { clave: 'na', etiqueta: 'N/A' },
+  { clave: 'tasaConfirmacion', etiqueta: 'Tasa confirmación', pct: true },
+  { clave: 'check', etiqueta: '✅' },
+  { clave: 'cross', etiqueta: '❌' },
+  { clave: 'tasaEfectividad', etiqueta: 'Tasa efectividad', pct: true },
+];
+
+async function obtenerJson(url: string) {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+    throw new Error(data.error ?? `Error HTTP ${r.status}`);
+  }
+  return r.json();
 }
 
 export function Resumen() {
-  const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [respuestas, setRespuestas] = useState<RespuestaConFila[]>([]);
+  const [registros, setRegistros] = useState<Registro[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-  const [fDesde, setFDesde] = useState('');
-  const [fHasta, setFHasta] = useState('');
+  const [fFuente, setFFuente] = useState<'' | Fuente>('');
+  const [fMes, setFMes] = useState('');
+  const [fDia, setFDia] = useState('');
   const [fArea, setFArea] = useState('');
-  const [fIdActividad, setFIdActividad] = useState('');
+  const [fActividad, setFActividad] = useState('');
   const [fCompanerx, setFCompanerx] = useState('');
 
+  const [corte, setCorte] = useState<Corte>('mes');
+  const [orden, setOrden] = useState<{ clave: ColumnaOrden; desc: boolean } | null>(null);
+
   useEffect(() => {
-    async function cargarTodo() {
-      try {
-        const [rActividades, rRespuestas] = await Promise.all([
-          fetch('/api/actividades'),
-          fetch('/api/respuestas'),
-        ]);
-        for (const r of [rActividades, rRespuestas]) {
-          if (!r.ok) {
-            const data = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-            throw new Error(data.error ?? `Error HTTP ${r.status}`);
-          }
-        }
-        setActividades(await rActividades.json());
-        setRespuestas(await rRespuestas.json());
-      } catch (e) {
-        setErrorCarga(e instanceof Error ? e.message : 'Error desconocido al cargar datos');
-      } finally {
-        setCargando(false);
-      }
-    }
-    cargarTodo();
+    // Histórico fijo + sistema en vivo: cada vez que se abre la página,
+    // la parte nueva se recalcula con las respuestas cargadas hasta ese momento.
+    Promise.all([obtenerJson('/api/historico'), obtenerJson('/api/respuestas')])
+      .then(([historico, respuestas]) => setRegistros([...desdeHistorico(historico), ...desdeSistema(respuestas)]))
+      .catch((e) => setErrorCarga(e instanceof Error ? e.message : 'Error desconocido al cargar datos'))
+      .finally(() => setCargando(false));
   }, []);
 
-  const areas = useMemo(() => [...new Set(respuestas.map((r) => r.área))].filter(Boolean).sort(), [respuestas]);
-  const companerxsOpciones = useMemo(() => [...new Set(respuestas.map((r) => r.compañerx))].filter(Boolean).sort(), [respuestas]);
-  const actividadesOpciones = useMemo(
-    () => [...actividades].sort((a, b) => b.fecha.localeCompare(a.fecha)),
-    [actividades]
-  );
-
-  const filtradas = useMemo(() => {
-    return respuestas.filter((r) => {
-      if (fDesde && r.fecha < fDesde) return false;
-      if (fHasta && r.fecha > fHasta) return false;
-      if (fArea && r.área !== fArea) return false;
-      if (fIdActividad && r.id_actividad !== fIdActividad) return false;
-      if (fCompanerx && r.compañerx !== fCompanerx) return false;
-      return true;
-    });
-  }, [respuestas, fDesde, fHasta, fArea, fIdActividad, fCompanerx]);
-
-  const sinNA = useMemo(() => filtradas.filter((r) => r.respuesta !== 'N/A'), [filtradas]);
-
-  const metricas = useMemo(() => {
-    const actividadesDistintas = new Set(filtradas.map((r) => r.id_actividad)).size;
-    const totalSi = sinNA.filter((r) => r.respuesta === 'Si').length;
-    const totalCheck = sinNA.filter((r) => r.estado_post === '✅').length;
+  const opciones = useMemo(() => {
+    const unicos = (f: (r: Registro) => string | null) =>
+      [...new Set(registros.map(f).filter((v): v is string => Boolean(v)))];
+    const actividades = new Map<string, string>();
+    registros.forEach((r) => actividades.set(r.actividadKey, r.actividadLabel));
     return {
-      actividadesDistintas,
-      totalConfirmados: totalSi,
-      tasaConfirmacion: sinNA.length > 0 ? totalSi / sinNA.length : 0,
-      tasaEfectividad: totalSi > 0 ? totalCheck / totalSi : 0,
+      meses: unicos((r) => r.mes).sort((a, b) => MESES.indexOf(a) - MESES.indexOf(b)),
+      dias: unicos((r) => r.diaSemana).sort((a, b) => DIAS.indexOf(a) - DIAS.indexOf(b)),
+      areas: unicos((r) => r.area).sort(),
+      companerxs: unicos((r) => r.companerx).sort(),
+      actividades: [...actividades.entries()].sort((a, b) => a[1].localeCompare(b[1])),
     };
-  }, [filtradas, sinNA]);
+  }, [registros]);
 
-  // Agrupa por actividad para el gráfico y la tabla-resumen (cuando no hay
-  // una actividad o compañerx puntual elegido).
-  const porActividad = useMemo(() => {
-    const mapa = new Map<string, { id: string; nombre: string; fecha: string; Si: number; No: number; 'A confirmar': number; 'Sin Respuesta': number }>();
-    filtradas.forEach((r) => {
-      if (r.respuesta === 'N/A') return;
-      if (!mapa.has(r.id_actividad)) {
-        mapa.set(r.id_actividad, { id: r.id_actividad, nombre: r.actividad, fecha: r.fecha, Si: 0, No: 0, 'A confirmar': 0, 'Sin Respuesta': 0 });
-      }
-      const g = mapa.get(r.id_actividad)!;
-      if (r.respuesta === 'Si' || r.respuesta === 'No' || r.respuesta === 'A confirmar' || r.respuesta === 'Sin Respuesta') {
-        g[r.respuesta]++;
-      }
+  const filtrados = useMemo(() => registros.filter((r) =>
+    (!fFuente || r.fuente === fFuente) &&
+    (!fMes || r.mes === fMes) &&
+    (!fDia || r.diaSemana === fDia) &&
+    (!fArea || r.area === fArea) &&
+    (!fActividad || r.actividadKey === fActividad) &&
+    (!fCompanerx || r.companerx === fCompanerx)
+  ), [registros, fFuente, fMes, fDia, fArea, fActividad, fCompanerx]);
+
+  const kpis = useMemo(() => calcularKpis(filtrados), [filtrados]);
+
+  const filasCorte = useMemo(() => {
+    const filas = agruparPorCorte(filtrados, corte);
+    if (!orden) return filas;
+    return [...filas].sort((a, b) => {
+      const va = (a[orden.clave] ?? -1) as number, vb = (b[orden.clave] ?? -1) as number;
+      return orden.desc ? vb - va : va - vb;
     });
-    return [...mapa.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
-  }, [filtradas]);
+  }, [filtrados, corte, orden]);
 
-  const vistaCompanerx = Boolean(fCompanerx) && !fIdActividad;
-  const vistaActividad = Boolean(fIdActividad);
-  const vistaResumenPorActividad = !vistaCompanerx && !vistaActividad;
+  function cambiarOrden(clave: ColumnaOrden) {
+    setOrden((prev) => (prev?.clave === clave ? { clave, desc: !prev.desc } : { clave, desc: true }));
+  }
 
-  if (cargando) return <p>Cargando...</p>;
+  function limpiarFiltros() {
+    setFFuente(''); setFMes(''); setFDia(''); setFArea(''); setFActividad(''); setFCompanerx('');
+  }
+
+  if (cargando) return <p>Cargando estadísticas...</p>;
   if (errorCarga) {
     return (
       <div className="card" style={{ borderColor: 'var(--color-acento)' }}>
@@ -111,180 +108,154 @@ export function Resumen() {
     );
   }
 
+  const tarjetas: { etiqueta: string; valor: string; nota?: string }[] = [
+    { etiqueta: 'Actividades', valor: String(kpis.actividades) },
+    { etiqueta: 'Si', valor: String(kpis.si) },
+    { etiqueta: 'No', valor: String(kpis.no) },
+    { etiqueta: 'A confirmar', valor: String(kpis.aConfirmar) },
+    { etiqueta: 'Sin Respuesta', valor: String(kpis.sinRespuesta) },
+    { etiqueta: 'N/A', valor: String(kpis.na) },
+    { etiqueta: 'Tasa de confirmación', valor: formatPct(kpis.tasaConfirmacion), nota: 'Si / (Si + No + A confirmar + Sin Respuesta)' },
+    { etiqueta: '✅', valor: String(kpis.check) },
+    { etiqueta: '❌', valor: String(kpis.cross) },
+    { etiqueta: 'Tasa de efectividad', valor: formatPct(kpis.tasaEfectividad), nota: '✅ / Si — puede superar 100%' },
+  ];
+
+  const select = (valor: string, onChange: (v: string) => void, opciones: [string, string][], todos: string) => (
+    <select value={valor} onChange={(e) => onChange(e.target.value)} style={{ width: '100%' }}>
+      <option value="">{todos}</option>
+      {opciones.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+  const pares = (lista: string[]): [string, string][] => lista.map((v) => [v, v]);
+
   return (
     <div>
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ color: 'var(--color-primario)', marginTop: 0 }}>Resumen / Estadísticas</h2>
-
-        <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.6rem' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#555' }}>Desde</label>
-            <input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)} style={{ width: '100%' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#555' }}>Hasta</label>
-            <input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)} style={{ width: '100%' }} />
-          </div>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#555' }}>Área</label>
-            <select value={fArea} onChange={(e) => setFArea(e.target.value)} style={{ width: '100%' }}>
-              <option value="">Todas</option>
-              {areas.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#555' }}>Actividad</label>
-            <select value={fIdActividad} onChange={(e) => setFIdActividad(e.target.value)} style={{ width: '100%' }}>
-              <option value="">Todas</option>
-              {actividadesOpciones.map((a) => (
-                <option key={a.id_actividad} value={a.id_actividad}>{a.nombre} — {a.fecha}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#555' }}>Compañerx</label>
-            <select value={fCompanerx} onChange={(e) => setFCompanerx(e.target.value)} style={{ width: '100%' }}>
-              <option value="">Todxs</option>
-              {companerxsOpciones.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <h2 style={{ color: 'var(--color-primario)', margin: 0 }}>Estadísticas</h2>
+          <button className="secundario" onClick={limpiarFiltros}>Limpiar filtros</button>
+        </div>
+        <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem', marginTop: '1rem' }}>
+          {select(fFuente, (v) => setFFuente(v as '' | Fuente), [['historico', 'Histórico (Ene-Jul, planilla)'], ['sistema', 'Sistema (app)']], 'Todas las fuentes')}
+          {select(fMes, setFMes, pares(opciones.meses), 'Todos los meses')}
+          {select(fDia, setFDia, pares(opciones.dias), 'Todos los días')}
+          {select(fArea, setFArea, pares(opciones.areas), 'Todas las áreas')}
+          {select(fActividad, setFActividad, opciones.actividades, 'Todas las actividades')}
+          {select(fCompanerx, setFCompanerx, pares(opciones.companerxs), 'Todxs lxs compañerxs')}
         </div>
       </div>
 
-      <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="card superficie">
-          <p style={{ fontSize: '0.8rem', color: '#555', margin: 0 }}>Actividades</p>
-          <p style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--color-primario)', margin: 0 }}>{metricas.actividadesDistintas}</p>
+      <div className="grid-responsive" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        {tarjetas.map((t) => (
+          <div key={t.etiqueta} className="card superficie" style={{ padding: '0.8rem' }}>
+            <p style={{ fontSize: '0.78rem', color: '#555', margin: 0 }}>{t.etiqueta}</p>
+            <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-primario)', margin: 0 }}>{t.valor}</p>
+            {t.nota && <p style={{ fontSize: '0.7rem', color: '#777', margin: 0 }}>{t.nota}</p>}
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <h3 style={{ color: 'var(--color-primario)', margin: 0 }}>Ver por</h3>
+          <select value={corte} onChange={(e) => { setCorte(e.target.value as Corte); setOrden(null); }}>
+            {CORTES.map((c) => <option key={c.valor} value={c.valor}>{c.etiqueta}</option>)}
+          </select>
+          <span style={{ fontSize: '0.8rem', color: '#777' }}>{filasCorte.length} filas · clic en un encabezado para ordenar</span>
         </div>
-        <div className="card superficie">
-          <p style={{ fontSize: '0.8rem', color: '#555', margin: 0 }}>Confirmados (Si)</p>
-          <p style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--color-primario)', margin: 0 }}>{metricas.totalConfirmados}</p>
-        </div>
-        <div className="card superficie">
-          <p style={{ fontSize: '0.8rem', color: '#555', margin: 0 }}>Tasa de confirmación</p>
-          <p style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--color-primario)', margin: 0 }}>{formatPct(metricas.tasaConfirmacion)}</p>
-        </div>
-        <div className="card superficie">
-          <p style={{ fontSize: '0.8rem', color: '#555', margin: 0 }}>
-            Tasa de efectividad
+
+        {corte === 'horario' && (
+          <p style={{ fontSize: '0.8rem', color: '#777' }}>
+            Solo respuestas del sistema con horario de llegada cargado (el histórico no tiene ese dato). La tasa de
+            confirmación ronda el 100% por construcción: el horario se carga casi siempre junto con un "Si".
           </p>
-          <p style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--color-primario)', margin: 0 }}>{formatPct(metricas.tasaEfectividad)}</p>
-          <p style={{ fontSize: '0.75rem', color: '#777', margin: 0 }}>de quienes confirmaron, % que realmente fue (✅)</p>
-        </div>
-      </div>
+        )}
 
-      {porActividad.length > 0 && (
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ color: 'var(--color-primario)', marginTop: 0 }}>Respuestas por actividad</h3>
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={porActividad} margin={{ top: 8, right: 8, left: 0, bottom: 60 }}>
+        {filasCorte.length > 0 && filasCorte.length <= MAX_FILAS_GRAFICO && (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={filasCorte} margin={{ top: 8, right: 8, left: 0, bottom: 50 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="nombre" angle={-30} textAnchor="end" interval={0} height={80} fontSize={12} />
+              <XAxis dataKey="grupo" angle={-30} textAnchor="end" interval={0} height={70} fontSize={12} />
               <YAxis allowDecimals={false} />
               <Tooltip />
               <Legend />
-              <Bar dataKey="Si" stackId="a" fill={COLOR_SI} />
-              <Bar dataKey="No" stackId="a" fill={COLOR_NO} />
-              <Bar dataKey="A confirmar" stackId="a" fill={COLOR_A_CONFIRMAR} />
-              <Bar dataKey="Sin Respuesta" stackId="a" fill={COLOR_SIN_RESPUESTA} />
+              <Bar dataKey="si" name="Si" stackId="a" fill={COLORES.Si} />
+              <Bar dataKey="no" name="No" stackId="a" fill={COLORES.No} />
+              <Bar dataKey="aConfirmar" name="A confirmar" stackId="a" fill={COLORES['A confirmar']} />
+              <Bar dataKey="sinRespuesta" name="Sin Respuesta" stackId="a" fill={COLORES['Sin Respuesta']} />
             </BarChart>
           </ResponsiveContainer>
+        )}
+
+        <div className="tabla-scroll">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
+                <th style={{ padding: '0.3rem' }}>{CORTES.find((c) => c.valor === corte)?.etiqueta}</th>
+                {COLUMNAS.map((c) => (
+                  <th key={c.clave} onClick={() => cambiarOrden(c.clave)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {c.etiqueta}{orden?.clave === c.clave ? (orden.desc ? ' ▼' : ' ▲') : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filasCorte.map((f) => (
+                <tr key={f.grupo} style={{ borderBottom: '1px solid var(--color-borde)' }}>
+                  <td style={{ padding: '0.3rem' }}>{f.grupo}</td>
+                  {COLUMNAS.map((c) => (
+                    <td key={c.clave}>{c.pct ? formatPct(f[c.clave] as number | null) : String(f[c.clave])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {(fCompanerx || fActividad) && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ color: 'var(--color-primario)', marginTop: 0 }}>
+            {fActividad ? 'Personas de la actividad' : `Actividades de ${fCompanerx}`}
+          </h3>
+          <div className="tabla-scroll">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
+                  <th style={{ padding: '0.3rem' }}>{fActividad ? 'Compañerx' : 'Actividad'}</th>
+                  <th>{fActividad ? 'Área' : 'Mes'}</th>
+                  <th>Respuesta</th>
+                  <th>Asistencia</th>
+                  <th>Horario</th>
+                  <th>Comentario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map((r, i) => (
+                  <tr key={`${r.actividadKey}-${r.companerx}-${i}`} style={{ borderBottom: '1px solid var(--color-borde)' }}>
+                    <td style={{ padding: '0.3rem' }}>{fActividad ? r.companerx : r.actividadLabel}</td>
+                    <td style={{ color: '#777' }}>{fActividad ? r.area ?? '—' : r.mes ?? '—'}</td>
+                    <td>{r.respuesta}</td>
+                    <td>{[r.check ? '✅' : '', r.cross ? '❌' : ''].join(' ').trim()}</td>
+                    <td style={{ color: '#777' }}>
+                      {[r.horaLlegada && `desde ${r.horaLlegada}`, r.horaSalida && `hasta ${r.horaSalida}`].filter(Boolean).join('; ')}
+                    </td>
+                    <td style={{ color: '#555' }}>{r.comentario}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      <div className="card">
-        <h3 style={{ color: 'var(--color-primario)', marginTop: 0 }}>
-          {vistaActividad && 'Detalle de la actividad'}
-          {vistaCompanerx && `Historial de ${fCompanerx}`}
-          {vistaResumenPorActividad && 'Resumen por actividad'}
-        </h3>
-
-        <div className="tabla-scroll">
-          {vistaActividad && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
-                  <th style={{ padding: '0.3rem' }}>Compañerx</th>
-                  <th>Área</th>
-                  <th>Respuesta</th>
-                  <th>Comentario</th>
-                  <th>Estado post</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtradas.map((r) => (
-                  <tr key={r._fila} style={{ borderBottom: '1px solid var(--color-borde)' }}>
-                    <td style={{ padding: '0.3rem' }}>{r.compañerx}</td>
-                    <td style={{ color: '#777' }}>{r.área}</td>
-                    <td>{r.respuesta}</td>
-                    <td style={{ color: '#555' }}>{r.comentario}</td>
-                    <td>{r.estado_post}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {vistaCompanerx && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
-                  <th style={{ padding: '0.3rem' }}>Actividad</th>
-                  <th>Fecha</th>
-                  <th>Respuesta</th>
-                  <th>Comentario</th>
-                  <th>Estado post</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtradas.map((r) => (
-                  <tr key={r._fila} style={{ borderBottom: '1px solid var(--color-borde)' }}>
-                    <td style={{ padding: '0.3rem' }}>{r.actividad}</td>
-                    <td style={{ color: '#777' }}>{r.fecha}</td>
-                    <td>{r.respuesta}</td>
-                    <td style={{ color: '#555' }}>{r.comentario}</td>
-                    <td>{r.estado_post}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {vistaResumenPorActividad && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-borde)' }}>
-                  <th style={{ padding: '0.3rem' }}>Actividad</th>
-                  <th>Fecha</th>
-                  <th>Si</th>
-                  <th>No</th>
-                  <th>A confirmar</th>
-                  <th>Sin Respuesta</th>
-                  <th>Tasa confirmación</th>
-                  <th>Tasa efectividad</th>
-                </tr>
-              </thead>
-              <tbody>
-                {porActividad.map((a) => {
-                  const total = a.Si + a.No + a['A confirmar'] + a['Sin Respuesta'];
-                  const checks = filtradas.filter((r) => r.id_actividad === a.id && r.estado_post === '✅').length;
-                  return (
-                    <tr key={a.id} style={{ borderBottom: '1px solid var(--color-borde)' }}>
-                      <td style={{ padding: '0.3rem' }}>{a.nombre}</td>
-                      <td style={{ color: '#777' }}>{a.fecha}</td>
-                      <td>{a.Si}</td>
-                      <td>{a.No}</td>
-                      <td>{a['A confirmar']}</td>
-                      <td>{a['Sin Respuesta']}</td>
-                      <td>{total > 0 ? formatPct(a.Si / total) : '—'}</td>
-                      <td>{a.Si > 0 ? formatPct(checks / a.Si) : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+      <div className="card superficie" style={{ fontSize: '0.8rem', color: '#555' }}>
+        <strong>Notas de lectura.</strong> El histórico (Ene-Jul) es una foto fija de las solapas cargadas a mano; el
+        sistema se recalcula con cada respuesta nueva. En el histórico, ✅/❌ salen del comentario, así que la
+        efectividad de esos meses puede estar subestimada. La tasa de efectividad puede superar 100% porque ✅ marca a
+        quien asistió, haya confirmado o no. El área es la de la persona, no la de la actividad. Enero no tiene área
+        registrada. 5 actividades históricas no tienen día de semana determinable.
       </div>
     </div>
   );

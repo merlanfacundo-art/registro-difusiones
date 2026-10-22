@@ -109,3 +109,24 @@ Esto levanta la app completa (frontend + `/api`) en `http://localhost:3000`.
 No existe ningún rol con alcance limitado a un subconjunto de actividades — los 3 roles ven todos los datos, la única diferencia es si pueden escribir o no. La columna `actividades_asignadas` en la hoja "Usuarios" quedó sin uso por este motivo; se conserva por si en el futuro hace falta un rol con ese alcance limitado.
 
 **Validación de rol:** los endpoints `/api/respuestas` (POST y PATCH) verifican del lado del servidor que el email de quien escribe (`cargado_por` en POST, `actor_email` en PATCH) tenga rol `Responsable` u `Organización`. Si no, devuelven `403`. Esto es independiente de que el frontend además oculte los botones — aunque alguien llame a la API directo (por ejemplo con curl o Postman), el servidor rechaza la escritura si el rol no corresponde.
+
+
+## Estadísticas (`/resumen`, menú "Estadísticas")
+
+Combina dos fuentes con los mismos criterios que la planilla "Estadísticas combinadas":
+
+- **Histórico (Ene-Jul):** foto fija de las solapas mensuales cargadas a mano, servida por `/api/historico` desde `api/_data/historico.ts`. Ese archivo lo genera `scripts/generar_historico.py`; solo hace falta regenerarlo si se corrige algún dato de esas solapas:
+
+  ```cmd
+  pip install openpyxl
+  python scripts\generar_historico.py "C:\ruta\Organizacion 2026.xlsx"
+  ```
+
+  (la planilla se exporta desde Sheets con Archivo > Descargar > Microsoft Excel).
+- **Sistema:** se calcula en vivo desde Actividades/Respuestas cada vez que se abre la página.
+
+La lógica de cálculo vive en `src/lib/estadisticas.ts` (normalización de ambas fuentes a un registro único + KPIs por corte), separada del componente `src/components/Resumen.tsx`.
+
+KPIs: Actividades, Si, No, A confirmar, Sin Respuesta, N/A, Tasa de confirmación (Si / Si+No+A confirmar+Sin Respuesta), ✅, ❌, Tasa de efectividad (✅ / Si, puede superar 100% porque ✅ marca a quien asistió aunque no haya confirmado). Cortes: actividad, compañerx, área, horario de llegada (solo sistema), mes, día de semana. Filtros combinables por fuente, mes, día, área, actividad y compañerx; con compañerx o actividad elegidos se muestra además el listado de detalle.
+
+**Pendiente de seguridad:** los endpoints de lectura (`/api/respuestas`, `/api/historico`, etc.) no validan quién llama; el login es del lado del navegador. Con estadísticas por persona disponibles, conviene agregar validación server-side también en las lecturas.
